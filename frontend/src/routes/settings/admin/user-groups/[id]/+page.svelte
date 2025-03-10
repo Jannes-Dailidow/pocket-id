@@ -1,5 +1,7 @@
 <script lang="ts">
-	import CustomClaimsInput from '$lib/components/custom-claims-input.svelte';
+	import CollapsibleCard from '$lib/components/collapsible-card.svelte';
+	import CustomClaimsInput from '$lib/components/form/custom-claims-input.svelte';
+	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
 	import * as Card from '$lib/components/ui/card';
 	import CustomClaimService from '$lib/services/custom-claim-service';
@@ -11,6 +13,7 @@
 	import { toast } from 'svelte-sonner';
 	import UserGroupForm from '../user-group-form.svelte';
 	import UserSelection from '../user-selection.svelte';
+	import appConfigStore from '$lib/stores/application-configuration-store';
 
 	let { data } = $props();
 	let userGroup = $state({
@@ -58,10 +61,13 @@
 	<title>User Group Details {userGroup.name}</title>
 </svelte:head>
 
-<div>
+<div class="flex items-center justify-between">
 	<a class="text-muted-foreground flex text-sm" href="/settings/admin/user-groups"
 		><LucideChevronLeft class="h-5 w-5" /> Back</a
 	>
+	{#if !!userGroup.ldapId}
+		<Badge variant="default" class="">LDAP</Badge>
+	{/if}
 </div>
 <Card.Root>
 	<Card.Header>
@@ -81,27 +87,27 @@
 
 	<Card.Content>
 		{#await userService.list() then users}
-			<UserSelection {users} bind:selectedUserIds={userGroup.userIds} />
+			<UserSelection
+				{users}
+				bind:selectedUserIds={userGroup.userIds}
+				selectionDisabled={!!userGroup.ldapId && $appConfigStore.ldapEnabled}
+			/>
 		{/await}
 		<div class="mt-5 flex justify-end">
-			<Button on:click={() => updateUserGroupUsers(userGroup.userIds)}>Save</Button>
+			<Button disabled={!!userGroup.ldapId && $appConfigStore.ldapEnabled} on:click={() => updateUserGroupUsers(userGroup.userIds)}
+				>Save</Button
+			>
 		</div>
 	</Card.Content>
 </Card.Root>
 
-<Card.Root>
-	<Card.Header>
-		<Card.Title>Custom Claims</Card.Title>
-		<Card.Description>
-			Custom claims are key-value pairs that can be used to store additional information about a
-			user. These claims will be included in the ID token if the scope "profile" is requested.
-			Custom claims defined on the user will be prioritized if there are conflicts.
-		</Card.Description>
-	</Card.Header>
-	<Card.Content>
-		<CustomClaimsInput bind:customClaims={userGroup.customClaims} />
-		<div class="mt-5 flex justify-end">
-			<Button onclick={updateCustomClaims} type="submit">Save</Button>
-		</div>
-	</Card.Content>
-</Card.Root>
+<CollapsibleCard
+	id="user-group-custom-claims"
+	title="Custom Claims"
+	description="Custom claims are key-value pairs that can be used to store additional information about a user. These claims will be included in the ID token if the scope 'profile' is requested. Custom claims defined on the user will be prioritized if there are conflicts."
+>
+	<CustomClaimsInput bind:customClaims={userGroup.customClaims} />
+	<div class="mt-5 flex justify-end">
+		<Button onclick={updateCustomClaims} type="submit">Save</Button>
+	</div>
+</CollapsibleCard>

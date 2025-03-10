@@ -3,13 +3,14 @@ package middleware
 import (
 	"errors"
 	"fmt"
+	"net/http"
+	"strings"
+
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
 	"github.com/go-playground/validator/v10"
-	"github.com/stonith404/pocket-id/backend/internal/common"
+	"github.com/pocket-id/pocket-id/backend/internal/common"
 	"gorm.io/gorm"
-	"net/http"
-	"strings"
 )
 
 type ErrorHandlerMiddleware struct{}
@@ -83,8 +84,6 @@ func handleValidationError(validationErrors validator.ValidationErrors) string {
 			errorMessage = fmt.Sprintf("%s must be at least %s characters long", fieldName, ve.Param())
 		case "max":
 			errorMessage = fmt.Sprintf("%s must be at most %s characters long", fieldName, ve.Param())
-		case "urlList":
-			errorMessage = fmt.Sprintf("%s must be a list of valid URLs", fieldName)
 		default:
 			errorMessage = fmt.Sprintf("%s is invalid", fieldName)
 		}

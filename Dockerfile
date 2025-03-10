@@ -1,5 +1,5 @@
 # Stage 1: Build Frontend
-FROM node:20-alpine AS frontend-builder
+FROM node:22-alpine AS frontend-builder
 WORKDIR /app/frontend
 COPY ./frontend/package*.json ./
 RUN npm ci
@@ -20,8 +20,8 @@ WORKDIR /app/backend/cmd
 RUN CGO_ENABLED=1 GOOS=linux go build -o /app/backend/pocket-id-backend .
 
 # Stage 3: Production Image
-FROM node:20-alpine
-# Delete default node user
+FROM node:22-alpine
+# Delete default node user
 RUN deluser --remove-home node
 
 RUN apk add --no-cache caddy curl su-exec
@@ -33,9 +33,6 @@ COPY --from=frontend-builder /app/frontend/node_modules ./frontend/node_modules
 COPY --from=frontend-builder /app/frontend/package.json ./frontend/package.json
 
 COPY --from=backend-builder /app/backend/pocket-id-backend ./backend/pocket-id-backend
-COPY --from=backend-builder /app/backend/migrations ./backend/migrations
-COPY --from=backend-builder /app/backend/email-templates ./backend/email-templates
-COPY --from=backend-builder /app/backend/images ./backend/images
 
 COPY ./scripts ./scripts
 RUN chmod +x ./scripts/*.sh

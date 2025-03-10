@@ -3,17 +3,18 @@ package model
 import (
 	"github.com/go-webauthn/webauthn/protocol"
 	"github.com/go-webauthn/webauthn/webauthn"
-	"github.com/stonith404/pocket-id/backend/internal/model/types"
+	datatype "github.com/pocket-id/pocket-id/backend/internal/model/types"
 )
 
 type User struct {
 	Base
 
-	Username  string
-	Email     string
-	FirstName string
-	LastName  string
-	IsAdmin   bool
+	Username  string `sortable:"true"`
+	Email     string `sortable:"true"`
+	FirstName string `sortable:"true"`
+	LastName  string `sortable:"true"`
+	IsAdmin   bool   `sortable:"true"`
+	LdapID    *string
 
 	CustomClaims []CustomClaim
 	UserGroups   []UserGroup `gorm:"many2many:user_groups_users;"`
@@ -33,7 +34,7 @@ func (u User) WebAuthnCredentials() []webauthn.Credential {
 
 	for i, credential := range u.Credentials {
 		credentials[i] = webauthn.Credential{
-			ID:              []byte(credential.CredentialID),
+			ID:              credential.CredentialID,
 			AttestationType: credential.AttestationType,
 			PublicKey:       credential.PublicKey,
 			Transport:       credential.Transport,

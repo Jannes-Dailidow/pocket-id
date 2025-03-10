@@ -1,14 +1,16 @@
 package service
 
 import (
-	"github.com/go-webauthn/webauthn/protocol"
-	"github.com/go-webauthn/webauthn/webauthn"
-	"github.com/stonith404/pocket-id/backend/internal/common"
-	"github.com/stonith404/pocket-id/backend/internal/model"
-	"github.com/stonith404/pocket-id/backend/internal/utils"
-	"gorm.io/gorm"
 	"net/http"
 	"time"
+
+	"github.com/go-webauthn/webauthn/protocol"
+	"github.com/go-webauthn/webauthn/webauthn"
+	"github.com/pocket-id/pocket-id/backend/internal/common"
+	"github.com/pocket-id/pocket-id/backend/internal/model"
+	datatype "github.com/pocket-id/pocket-id/backend/internal/model/types"
+	"github.com/pocket-id/pocket-id/backend/internal/utils"
+	"gorm.io/gorm"
 )
 
 type WebAuthnService struct {
@@ -22,7 +24,7 @@ type WebAuthnService struct {
 func NewWebAuthnService(db *gorm.DB, jwtService *JwtService, auditLogService *AuditLogService, appConfigService *AppConfigService) *WebAuthnService {
 	webauthnConfig := &webauthn.Config{
 		RPDisplayName: appConfigService.DbConfig.AppName.Value,
-		RPID:          utils.GetHostFromURL(common.EnvConfig.AppURL),
+		RPID:          utils.GetHostnameFromURL(common.EnvConfig.AppURL),
 		RPOrigins:     []string{common.EnvConfig.AppURL},
 		Timeouts: webauthn.TimeoutsConfig{
 			Login: webauthn.TimeoutConfig{
@@ -55,7 +57,7 @@ func (s *WebAuthnService) BeginRegistration(userID string) (*model.PublicKeyCred
 	}
 
 	sessionToStore := &model.WebauthnSession{
-		ExpiresAt:        session.Expires,
+		ExpiresAt:        datatype.DateTime(session.Expires),
 		Challenge:        session.Challenge,
 		UserVerification: string(session.UserVerification),
 	}
@@ -79,7 +81,7 @@ func (s *WebAuthnService) VerifyRegistration(sessionID, userID string, r *http.R
 
 	session := webauthn.SessionData{
 		Challenge: storedSession.Challenge,
-		Expires:   storedSession.ExpiresAt,
+		Expires:   storedSession.ExpiresAt.ToTime(),
 		UserID:    []byte(userID),
 	}
 
@@ -95,7 +97,7 @@ func (s *WebAuthnService) VerifyRegistration(sessionID, userID string, r *http.R
 
 	credentialToStore := model.WebauthnCredential{
 		Name:            "New Passkey",
-		CredentialID:    string(credential.ID),
+		CredentialID:    credential.ID,
 		AttestationType: credential.AttestationType,
 		PublicKey:       credential.PublicKey,
 		Transport:       credential.Transport,
@@ -117,7 +119,7 @@ func (s *WebAuthnService) BeginLogin() (*model.PublicKeyCredentialRequestOptions
 	}
 
 	sessionToStore := &model.WebauthnSession{
-		ExpiresAt:        session.Expires,
+		ExpiresAt:        datatype.DateTime(session.Expires),
 		Challenge:        session.Challenge,
 		UserVerification: string(session.UserVerification),
 	}
@@ -133,7 +135,7 @@ func (s *WebAuthnService) BeginLogin() (*model.PublicKeyCredentialRequestOptions
 	}, nil
 }
 
-func (s *WebAuthnService) VerifyLogin(sessionID, userID string, credentialAssertionData *protocol.ParsedCredentialAssertionData, ipAddress, userAgent string) (model.User, string, error) {
+func (s *WebAuthnService) VerifyLogin(sessionID string, credentialAssertionData *protocol.ParsedCredentialAssertionData, ipAddress, userAgent string) (model.User, string, error) {
 	var storedSession model.WebauthnSession
 	if err := s.db.First(&storedSession, "id = ?", sessionID).Error; err != nil {
 		return model.User{}, "", err
@@ -141,7 +143,7 @@ func (s *WebAuthnService) VerifyLogin(sessionID, userID string, credentialAssert
 
 	session := webauthn.SessionData{
 		Challenge: storedSession.Challenge,
-		Expires:   storedSession.ExpiresAt,
+		Expires:   storedSession.ExpiresAt.ToTime(),
 	}
 
 	var user *model.User
@@ -153,10 +155,6 @@ func (s *WebAuthnService) VerifyLogin(sessionID, userID string, credentialAssert
 	}, session, credentialAssertionData)
 
 	if err != nil {
-		return model.User{}, "", err
-	}
-
-	if err := s.db.Find(&user, "id = ?", userID).Error; err != nil {
 		return model.User{}, "", err
 	}
 

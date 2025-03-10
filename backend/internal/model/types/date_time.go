@@ -3,9 +3,11 @@ package datatype
 import (
 	"database/sql/driver"
 	"time"
+
+	"github.com/pocket-id/pocket-id/backend/internal/common"
 )
 
-// DateTime custom type for time.Time to store date as unix timestamp in the database
+// DateTime custom type for time.Time to store date as unix timestamp for sqlite and as date for postgres
 type DateTime time.Time
 
 func (date *DateTime) Scan(value interface{}) (err error) {
@@ -14,7 +16,11 @@ func (date *DateTime) Scan(value interface{}) (err error) {
 }
 
 func (date DateTime) Value() (driver.Value, error) {
-	return time.Time(date).Unix(), nil
+	if common.EnvConfig.DbProvider == common.DbProviderSqlite {
+		return time.Time(date).Unix(), nil
+	} else {
+		return time.Time(date), nil
+	}
 }
 
 func (date DateTime) UTC() time.Time {

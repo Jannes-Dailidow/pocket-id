@@ -4,7 +4,8 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"errors"
-	datatype "github.com/stonith404/pocket-id/backend/internal/model/types"
+
+	datatype "github.com/pocket-id/pocket-id/backend/internal/model/types"
 	"gorm.io/gorm"
 )
 
@@ -36,15 +37,18 @@ type OidcAuthorizationCode struct {
 type OidcClient struct {
 	Base
 
-	Name         string
-	Secret       string
-	CallbackURLs CallbackURLs
-	ImageType    *string
-	HasLogo      bool `gorm:"-"`
-	IsPublic     bool
+	Name               string `sortable:"true"`
+	Secret             string
+	CallbackURLs       UrlList
+	LogoutCallbackURLs UrlList
+	ImageType          *string
+	HasLogo            bool `gorm:"-"`
+	IsPublic           bool
+	PkceEnabled        bool
 
-	CreatedByID string
-	CreatedBy   User
+	AllowedUserGroups []UserGroup `gorm:"many2many:oidc_clients_allowed_user_groups;"`
+	CreatedByID       string
+	CreatedBy         User
 }
 
 func (c *OidcClient) AfterFind(_ *gorm.DB) (err error) {
@@ -53,9 +57,9 @@ func (c *OidcClient) AfterFind(_ *gorm.DB) (err error) {
 	return nil
 }
 
-type CallbackURLs []string
+type UrlList []string
 
-func (cu *CallbackURLs) Scan(value interface{}) error {
+func (cu *UrlList) Scan(value interface{}) error {
 	if v, ok := value.([]byte); ok {
 		return json.Unmarshal(v, cu)
 	} else {
@@ -63,6 +67,6 @@ func (cu *CallbackURLs) Scan(value interface{}) error {
 	}
 }
 
-func (cu CallbackURLs) Value() (driver.Value, error) {
+func (cu UrlList) Value() (driver.Value, error) {
 	return json.Marshal(cu)
 }

@@ -1,14 +1,12 @@
-import type { Paginated, PaginationRequest } from '$lib/types/pagination.type';
+import type { Paginated, SearchPaginationSortRequest } from '$lib/types/pagination.type';
+import type { UserGroup } from '$lib/types/user-group.type';
 import type { User, UserCreate } from '$lib/types/user.type';
 import APIService from './api-service';
 
 export default class UserService extends APIService {
-	async list(search?: string, pagination?: PaginationRequest) {
+	async list(options?: SearchPaginationSortRequest) {
 		const res = await this.api.get('/users', {
-			params: {
-				search,
-				...pagination
-			}
+			params: options
 		});
 		return res.data as Paginated<User>;
 	}
@@ -28,6 +26,11 @@ export default class UserService extends APIService {
 		return res.data as User;
 	}
 
+	async getUserGroups(userId: string) {
+		const res = await this.api.get(`/users/${userId}/groups`);
+		return res.data as UserGroup[];
+	}
+
 	async update(id: string, user: UserCreate) {
 		const res = await this.api.put(`/users/${id}`, user);
 		return res.data as User;
@@ -42,6 +45,20 @@ export default class UserService extends APIService {
 		await this.api.delete(`/users/${id}`);
 	}
 
+	async updateProfilePicture(userId: string, image: File) {
+		const formData = new FormData();
+		formData.append('file', image!);
+
+		await this.api.put(`/users/${userId}/profile-picture`, formData);
+	}
+
+	async updateCurrentUsersProfilePicture(image: File) {
+		const formData = new FormData();
+		formData.append('file', image!);
+
+		await this.api.put('/users/me/profile-picture', formData);
+	}
+
 	async createOneTimeAccessToken(userId: string, expiresAt: Date) {
 		const res = await this.api.post(`/users/${userId}/one-time-access-token`, {
 			userId,
@@ -52,6 +69,15 @@ export default class UserService extends APIService {
 
 	async exchangeOneTimeAccessToken(token: string) {
 		const res = await this.api.post(`/one-time-access-token/${token}`);
+		return res.data as User;
+	}
+
+	async requestOneTimeAccessEmail(email: string, redirectPath?: string) {
+		await this.api.post('/one-time-access-email', { email, redirectPath });
+	}
+
+	async updateUserGroups(id: string, userGroupIds: string[]) {
+		const res = await this.api.put(`/users/${id}/user-groups`, { userGroupIds });
 		return res.data as User;
 	}
 }

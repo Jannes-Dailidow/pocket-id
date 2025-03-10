@@ -1,4 +1,5 @@
 <script lang="ts">
+	import * as Alert from '$lib/components/ui/alert';
 	import { Button } from '$lib/components/ui/button';
 	import * as Card from '$lib/components/ui/card';
 	import UserService from '$lib/services/user-service';
@@ -8,9 +9,11 @@
 	import type { UserCreate } from '$lib/types/user.type';
 	import { axiosErrorToast, getWebauthnErrorMessage } from '$lib/utils/error-util';
 	import { startRegistration } from '@simplewebauthn/browser';
+	import { LucideAlertTriangle } from 'lucide-svelte';
 	import { toast } from 'svelte-sonner';
 	import AccountForm from './account-form.svelte';
 	import PasskeyList from './passkey-list.svelte';
+	import ProfilePictureSettings from '../../../lib/components/form/profile-picture-settings.svelte';
 	import RenamePasskeyModal from './rename-passkey-modal.svelte';
 
 	let { data } = $props();
@@ -34,6 +37,13 @@
 		return success;
 	}
 
+	async function updateProfilePicture(image: File) {
+		await userService
+			.updateCurrentUsersProfilePicture(image)
+			.then(() => toast.success('Profile picture updated successfully'))
+			.catch(axiosErrorToast);
+	}
+
 	async function createPasskey() {
 		try {
 			const opts = await webauthnService.getRegistrationOptions();
@@ -52,7 +62,28 @@
 	<title>Account Settings</title>
 </svelte:head>
 
-{#if $appConfigStore.allowOwnAccountEdit}
+{#if passkeys.length == 0}
+	<Alert.Root variant="warning">
+		<LucideAlertTriangle class="size-4" />
+		<Alert.Title>Passkey missing</Alert.Title>
+		<Alert.Description
+			>Please add a passkey to prevent losing access to your account.</Alert.Description
+		>
+	</Alert.Root>
+{:else if passkeys.length == 1}
+	<Alert.Root variant="warning" dismissibleId="single-passkey">
+		<LucideAlertTriangle class="size-4" />
+		<Alert.Title>Single Passkey Configured</Alert.Title>
+		<Alert.Description
+			>It is recommended to add more than one passkey to avoid loosing access to your account.</Alert.Description
+		>
+	</Alert.Root>
+{/if}
+
+<fieldset
+	disabled={!$appConfigStore.allowOwnAccountEdit ||
+		(!!account.ldapId && $appConfigStore.ldapEnabled)}
+>
 	<Card.Root>
 		<Card.Header>
 			<Card.Title>Account Details</Card.Title>
@@ -61,7 +92,13 @@
 			<AccountForm {account} callback={updateAccount} />
 		</Card.Content>
 	</Card.Root>
-{/if}
+</fieldset>
+
+<Card.Root>
+	<Card.Content class="pt-6">
+		<ProfilePictureSettings userId="me" isLdapUser={!!account.ldapId} callback={updateProfilePicture} />
+	</Card.Content>
+</Card.Root>
 
 <Card.Root>
 	<Card.Header>
@@ -77,7 +114,7 @@
 	</Card.Header>
 	{#if passkeys.length != 0}
 		<Card.Content>
-			<PasskeyList {passkeys} />
+			<PasskeyList bind:passkeys />
 		</Card.Content>
 	{/if}
 </Card.Root>

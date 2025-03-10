@@ -1,22 +1,31 @@
 package controller
 
 import (
-	"github.com/gin-gonic/gin"
-	"github.com/stonith404/pocket-id/backend/internal/dto"
-	"github.com/stonith404/pocket-id/backend/internal/middleware"
-	"github.com/stonith404/pocket-id/backend/internal/service"
+	"github.com/pocket-id/pocket-id/backend/internal/common"
+	"github.com/pocket-id/pocket-id/backend/internal/utils/cookie"
+	"log"
 	"net/http"
-	"strconv"
+	"net/url"
 	"strings"
+
+	"github.com/gin-gonic/gin"
+	"github.com/pocket-id/pocket-id/backend/internal/dto"
+	"github.com/pocket-id/pocket-id/backend/internal/middleware"
+	"github.com/pocket-id/pocket-id/backend/internal/service"
+	"github.com/pocket-id/pocket-id/backend/internal/utils"
 )
 
 func NewOidcController(group *gin.RouterGroup, jwtAuthMiddleware *middleware.JwtAuthMiddleware, fileSizeLimitMiddleware *middleware.FileSizeLimitMiddleware, oidcService *service.OidcService, jwtService *service.JwtService) {
 	oc := &OidcController{oidcService: oidcService, jwtService: jwtService}
 
 	group.POST("/oidc/authorize", jwtAuthMiddleware.Add(false), oc.authorizeHandler)
-	group.POST("/oidc/authorize/new-client", jwtAuthMiddleware.Add(false), oc.authorizeNewClientHandler)
+	group.POST("/oidc/authorization-required", jwtAuthMiddleware.Add(false), oc.authorizationConfirmationRequiredHandler)
+
 	group.POST("/oidc/token", oc.createTokensHandler)
 	group.GET("/oidc/userinfo", oc.userInfoHandler)
+	group.POST("/oidc/userinfo", oc.userInfoHandler)
+	group.POST("/oidc/end-session", oc.EndSessionHandler)
+	group.GET("/oidc/end-session", oc.EndSessionHandler)
 
 	group.GET("/oidc/clients", jwtAuthMiddleware.Add(true), oc.listClientsHandler)
 	group.POST("/oidc/clients", jwtAuthMiddleware.Add(true), oc.createClientHandler)
@@ -24,6 +33,7 @@ func NewOidcController(group *gin.RouterGroup, jwtAuthMiddleware *middleware.Jwt
 	group.PUT("/oidc/clients/:id", jwtAuthMiddleware.Add(true), oc.updateClientHandler)
 	group.DELETE("/oidc/clients/:id", jwtAuthMiddleware.Add(true), oc.deleteClientHandler)
 
+	group.PUT("/oidc/clients/:id/allowed-user-groups", jwtAuthMiddleware.Add(true), oc.updateAllowedUserGroupsHandler)
 	group.POST("/oidc/clients/:id/secret", jwtAuthMiddleware.Add(true), oc.createClientSecretHandler)
 
 	group.GET("/oidc/clients/:id/logo", oc.getClientLogoHandler)
@@ -57,25 +67,20 @@ func (oc *OidcController) authorizeHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
-func (oc *OidcController) authorizeNewClientHandler(c *gin.Context) {
-	var input dto.AuthorizeOidcClientRequestDto
+func (oc *OidcController) authorizationConfirmationRequiredHandler(c *gin.Context) {
+	var input dto.AuthorizationRequiredDto
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.Error(err)
 		return
 	}
 
-	code, callbackURL, err := oc.oidcService.AuthorizeNewClient(input, c.GetString("userID"), c.ClientIP(), c.Request.UserAgent())
+	hasAuthorizedClient, err := oc.oidcService.HasAuthorizedClient(input.ClientID, c.GetString("userID"), input.Scope)
 	if err != nil {
 		c.Error(err)
 		return
 	}
 
-	response := dto.AuthorizeOidcClientResponseDto{
-		Code:        code,
-		CallbackURL: callbackURL,
-	}
-
-	c.JSON(http.StatusOK, response)
+	c.JSON(http.StatusOK, gin.H{"authorizationRequired": !hasAuthorizedClient})
 }
 
 func (oc *OidcController) createTokensHandler(c *gin.Context) {
@@ -107,7 +112,14 @@ func (oc *OidcController) createTokensHandler(c *gin.Context) {
 }
 
 func (oc *OidcController) userInfoHandler(c *gin.Context) {
-	token := strings.Split(c.GetHeader("Authorization"), " ")[1]
+	authHeaderSplit := strings.Split(c.GetHeader("Authorization"), " ")
+	if len(authHeaderSplit) != 2 {
+		c.Error(&common.MissingAccessToken{})
+		return
+	}
+
+	token := authHeaderSplit[1]
+
 	jwtClaims, err := oc.jwtService.VerifyOauthAccessToken(token)
 	if err != nil {
 		c.Error(err)
@@ -124,6 +136,44 @@ func (oc *OidcController) userInfoHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, claims)
 }
 
+func (oc *OidcController) EndSessionHandler(c *gin.Context) {
+	var input dto.OidcLogoutDto
+
+	// Bind query parameters to the struct
+	if c.Request.Method == http.MethodGet {
+		if err := c.ShouldBindQuery(&input); err != nil {
+			c.Error(err)
+			return
+		}
+	} else if c.Request.Method == http.MethodPost {
+		// Bind form parameters to the struct
+		if err := c.ShouldBind(&input); err != nil {
+			c.Error(err)
+			return
+		}
+	}
+
+	callbackURL, err := oc.oidcService.ValidateEndSession(input, c.GetString("userID"))
+	if err != nil {
+		// If the validation fails, the user has to confirm the logout manually and doesn't get redirected
+		log.Printf("Error getting logout callback URL, the user has to confirm the logout manually: %v", err)
+		c.Redirect(http.StatusFound, common.EnvConfig.AppURL+"/logout")
+		return
+	}
+
+	// The validation was successful, so we can log out and redirect the user to the callback URL without confirmation
+	cookie.AddAccessTokenCookie(c, 0, "")
+
+	logoutCallbackURL, _ := url.Parse(callbackURL)
+	if input.State != "" {
+		q := logoutCallbackURL.Query()
+		q.Set("state", input.State)
+		logoutCallbackURL.RawQuery = q.Encode()
+	}
+
+	c.Redirect(http.StatusFound, logoutCallbackURL.String())
+}
+
 func (oc *OidcController) getClientHandler(c *gin.Context) {
 	clientId := c.Param("id")
 	client, err := oc.oidcService.GetClient(clientId)
@@ -134,7 +184,7 @@ func (oc *OidcController) getClientHandler(c *gin.Context) {
 
 	// Return a different DTO based on the user's role
 	if c.GetBool("userIsAdmin") {
-		clientDto := dto.OidcClientDto{}
+		clientDto := dto.OidcClientWithAllowedUserGroupsDto{}
 		err = dto.MapStruct(client, &clientDto)
 		if err == nil {
 			c.JSON(http.StatusOK, clientDto)
@@ -153,11 +203,14 @@ func (oc *OidcController) getClientHandler(c *gin.Context) {
 }
 
 func (oc *OidcController) listClientsHandler(c *gin.Context) {
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	pageSize, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
 	searchTerm := c.Query("search")
+	var sortedPaginationRequest utils.SortedPaginationRequest
+	if err := c.ShouldBindQuery(&sortedPaginationRequest); err != nil {
+		c.Error(err)
+		return
+	}
 
-	clients, pagination, err := oc.oidcService.ListClients(searchTerm, page, pageSize)
+	clients, pagination, err := oc.oidcService.ListClients(searchTerm, sortedPaginationRequest)
 	if err != nil {
 		c.Error(err)
 		return
@@ -188,7 +241,7 @@ func (oc *OidcController) createClientHandler(c *gin.Context) {
 		return
 	}
 
-	var clientDto dto.OidcClientDto
+	var clientDto dto.OidcClientWithAllowedUserGroupsDto
 	if err := dto.MapStruct(client, &clientDto); err != nil {
 		c.Error(err)
 		return
@@ -220,7 +273,7 @@ func (oc *OidcController) updateClientHandler(c *gin.Context) {
 		return
 	}
 
-	var clientDto dto.OidcClientDto
+	var clientDto dto.OidcClientWithAllowedUserGroupsDto
 	if err := dto.MapStruct(client, &clientDto); err != nil {
 		c.Error(err)
 		return
@@ -274,4 +327,26 @@ func (oc *OidcController) deleteClientLogoHandler(c *gin.Context) {
 	}
 
 	c.Status(http.StatusNoContent)
+}
+
+func (oc *OidcController) updateAllowedUserGroupsHandler(c *gin.Context) {
+	var input dto.OidcUpdateAllowedUserGroupsDto
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.Error(err)
+		return
+	}
+
+	oidcClient, err := oc.oidcService.UpdateAllowedUserGroups(c.Param("id"), input)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	var oidcClientDto dto.OidcClientDto
+	if err := dto.MapStruct(oidcClient, &oidcClientDto); err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, oidcClientDto)
 }

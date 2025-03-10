@@ -1,5 +1,5 @@
 <script lang="ts">
-	import FormInput from '$lib/components/form-input.svelte';
+	import FormInput from '$lib/components/form/form-input.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import type { UserCreate } from '$lib/types/user.type';
 	import { createForm } from '$lib/utils/form-util';
@@ -16,9 +16,16 @@
 	let isLoading = $state(false);
 
 	const formSchema = z.object({
-		firstName: z.string().min(2).max(50),
-		lastName: z.string().min(2).max(50),
-		username: z.string().min(2).max(50),
+		firstName: z.string().min(1).max(50),
+		lastName: z.string().min(1).max(50),
+		username: z
+			.string()
+			.min(2)
+			.max(30)
+			.regex(
+				/^[a-z0-9_@.-]+$/,
+				"Username can only contain lowercase letters, numbers, underscores, dots, hyphens, and '@' symbols"
+			),
 		email: z.string().email(),
 		isAdmin: z.boolean()
 	});

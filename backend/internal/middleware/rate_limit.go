@@ -1,9 +1,10 @@
 package middleware
 
 import (
-	"github.com/stonith404/pocket-id/backend/internal/common"
 	"sync"
 	"time"
+
+	"github.com/pocket-id/pocket-id/backend/internal/common"
 
 	"github.com/gin-gonic/gin"
 	"golang.org/x/time/rate"
@@ -16,8 +17,12 @@ func NewRateLimitMiddleware() *RateLimitMiddleware {
 }
 
 func (m *RateLimitMiddleware) Add(limit rate.Limit, burst int) gin.HandlerFunc {
+	// Map to store the rate limiters per IP
+	var clients = make(map[string]*client)
+	var mu sync.Mutex
+
 	// Start the cleanup routine
-	go cleanupClients()
+	go cleanupClients(&mu, clients)
 
 	return func(c *gin.Context) {
 		ip := c.ClientIP()
@@ -29,7 +34,7 @@ func (m *RateLimitMiddleware) Add(limit rate.Limit, burst int) gin.HandlerFunc {
 			return
 		}
 
-		limiter := getLimiter(ip, limit, burst)
+		limiter := getLimiter(ip, limit, burst, &mu, clients)
 		if !limiter.Allow() {
 			c.Error(&common.TooManyRequestsError{})
 			c.Abort()
@@ -45,12 +50,8 @@ type client struct {
 	lastSeen time.Time
 }
 
-// Map to store the rate limiters per IP
-var clients = make(map[string]*client)
-var mu sync.Mutex
-
 // Cleanup routine to remove stale clients that haven't been seen for a while
-func cleanupClients() {
+func cleanupClients(mu *sync.Mutex, clients map[string]*client) {
 	for {
 		time.Sleep(time.Minute)
 		mu.Lock()
@@ -64,7 +65,7 @@ func cleanupClients() {
 }
 
 // getLimiter retrieves the rate limiter for a given IP address, creating one if it doesn't exist
-func getLimiter(ip string, limit rate.Limit, burst int) *rate.Limiter {
+func getLimiter(ip string, limit rate.Limit, burst int, mu *sync.Mutex, clients map[string]*client) *rate.Limiter {
 	mu.Lock()
 	defer mu.Unlock()
 

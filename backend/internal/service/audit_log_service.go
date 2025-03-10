@@ -1,12 +1,13 @@
 package service
 
 import (
-	userAgentParser "github.com/mileusna/useragent"
-	"github.com/stonith404/pocket-id/backend/internal/model"
-	"github.com/stonith404/pocket-id/backend/internal/utils"
-	"github.com/stonith404/pocket-id/backend/internal/utils/email"
-	"gorm.io/gorm"
 	"log"
+
+	userAgentParser "github.com/mileusna/useragent"
+	"github.com/pocket-id/pocket-id/backend/internal/model"
+	"github.com/pocket-id/pocket-id/backend/internal/utils"
+	"github.com/pocket-id/pocket-id/backend/internal/utils/email"
+	"gorm.io/gorm"
 )
 
 type AuditLogService struct {
@@ -58,8 +59,8 @@ func (s *AuditLogService) CreateNewSignInWithEmail(ipAddress, userAgent, userID 
 		return createdAuditLog
 	}
 
-	// If the user hasn't logged in from the same device before, send an email
-	if count <= 1 {
+	// If the user hasn't logged in from the same device before and email notifications are enabled, send an email
+	if s.appConfigService.DbConfig.EmailLoginNotificationEnabled.Value == "true" && count <= 1 {
 		go func() {
 			var user model.User
 			s.db.Where("id = ?", userID).First(&user)
@@ -84,11 +85,11 @@ func (s *AuditLogService) CreateNewSignInWithEmail(ipAddress, userAgent, userID 
 }
 
 // ListAuditLogsForUser retrieves all audit logs for a given user ID
-func (s *AuditLogService) ListAuditLogsForUser(userID string, page int, pageSize int) ([]model.AuditLog, utils.PaginationResponse, error) {
+func (s *AuditLogService) ListAuditLogsForUser(userID string, sortedPaginationRequest utils.SortedPaginationRequest) ([]model.AuditLog, utils.PaginationResponse, error) {
 	var logs []model.AuditLog
-	query := s.db.Model(&model.AuditLog{}).Where("user_id = ?", userID).Order("created_at desc")
+	query := s.db.Model(&model.AuditLog{}).Where("user_id = ?", userID)
 
-	pagination, err := utils.Paginate(page, pageSize, query, &logs)
+	pagination, err := utils.PaginateAndSort(sortedPaginationRequest, query, &logs)
 	return logs, pagination, err
 }
 

@@ -1,20 +1,23 @@
 package controller
 
 import (
-	"github.com/go-webauthn/webauthn/protocol"
-	"github.com/stonith404/pocket-id/backend/internal/common"
-	"github.com/stonith404/pocket-id/backend/internal/dto"
-	"github.com/stonith404/pocket-id/backend/internal/middleware"
 	"net/http"
+	"strconv"
 	"time"
 
+	"github.com/go-webauthn/webauthn/protocol"
+	"github.com/pocket-id/pocket-id/backend/internal/common"
+	"github.com/pocket-id/pocket-id/backend/internal/dto"
+	"github.com/pocket-id/pocket-id/backend/internal/middleware"
+	"github.com/pocket-id/pocket-id/backend/internal/utils/cookie"
+
 	"github.com/gin-gonic/gin"
-	"github.com/stonith404/pocket-id/backend/internal/service"
+	"github.com/pocket-id/pocket-id/backend/internal/service"
 	"golang.org/x/time/rate"
 )
 
-func NewWebauthnController(group *gin.RouterGroup, jwtAuthMiddleware *middleware.JwtAuthMiddleware, rateLimitMiddleware *middleware.RateLimitMiddleware, webauthnService *service.WebAuthnService) {
-	wc := &WebauthnController{webAuthnService: webauthnService}
+func NewWebauthnController(group *gin.RouterGroup, jwtAuthMiddleware *middleware.JwtAuthMiddleware, rateLimitMiddleware *middleware.RateLimitMiddleware, webauthnService *service.WebAuthnService, appConfigService *service.AppConfigService) {
+	wc := &WebauthnController{webAuthnService: webauthnService, appConfigService: appConfigService}
 	group.GET("/webauthn/register/start", jwtAuthMiddleware.Add(false), wc.beginRegistrationHandler)
 	group.POST("/webauthn/register/finish", jwtAuthMiddleware.Add(false), wc.verifyRegistrationHandler)
 
@@ -29,7 +32,8 @@ func NewWebauthnController(group *gin.RouterGroup, jwtAuthMiddleware *middleware
 }
 
 type WebauthnController struct {
-	webAuthnService *service.WebAuthnService
+	webAuthnService  *service.WebAuthnService
+	appConfigService *service.AppConfigService
 }
 
 func (wc *WebauthnController) beginRegistrationHandler(c *gin.Context) {
@@ -40,12 +44,12 @@ func (wc *WebauthnController) beginRegistrationHandler(c *gin.Context) {
 		return
 	}
 
-	c.SetCookie("session_id", options.SessionID, int(options.Timeout.Seconds()), "/", "", false, true)
+	cookie.AddSessionIdCookie(c, int(options.Timeout.Seconds()), options.SessionID)
 	c.JSON(http.StatusOK, options.Response)
 }
 
 func (wc *WebauthnController) verifyRegistrationHandler(c *gin.Context) {
-	sessionID, err := c.Cookie("session_id")
+	sessionID, err := c.Cookie(cookie.SessionIdCookieName)
 	if err != nil {
 		c.Error(&common.MissingSessionIdError{})
 		return
@@ -74,12 +78,12 @@ func (wc *WebauthnController) beginLoginHandler(c *gin.Context) {
 		return
 	}
 
-	c.SetCookie("session_id", options.SessionID, int(options.Timeout.Seconds()), "/", "", false, true)
+	cookie.AddSessionIdCookie(c, int(options.Timeout.Seconds()), options.SessionID)
 	c.JSON(http.StatusOK, options.Response)
 }
 
 func (wc *WebauthnController) verifyLoginHandler(c *gin.Context) {
-	sessionID, err := c.Cookie("session_id")
+	sessionID, err := c.Cookie(cookie.SessionIdCookieName)
 	if err != nil {
 		c.Error(&common.MissingSessionIdError{})
 		return
@@ -91,9 +95,7 @@ func (wc *WebauthnController) verifyLoginHandler(c *gin.Context) {
 		return
 	}
 
-	userID := c.GetString("userID")
-
-	user, token, err := wc.webAuthnService.VerifyLogin(sessionID, userID, credentialAssertionData, c.ClientIP(), c.Request.UserAgent())
+	user, token, err := wc.webAuthnService.VerifyLogin(sessionID, credentialAssertionData, c.ClientIP(), c.Request.UserAgent())
 	if err != nil {
 		c.Error(err)
 		return
@@ -105,7 +107,10 @@ func (wc *WebauthnController) verifyLoginHandler(c *gin.Context) {
 		return
 	}
 
-	c.SetCookie("access_token", token, int(time.Hour.Seconds()), "/", "", false, true)
+	sessionDurationInMinutesParsed, _ := strconv.Atoi(wc.appConfigService.DbConfig.SessionDuration.Value)
+	maxAge := sessionDurationInMinutesParsed * 60
+	cookie.AddAccessTokenCookie(c, maxAge, token)
+
 	c.JSON(http.StatusOK, userDto)
 }
 
@@ -165,6 +170,6 @@ func (wc *WebauthnController) updateCredentialHandler(c *gin.Context) {
 }
 
 func (wc *WebauthnController) logoutHandler(c *gin.Context) {
-	c.SetCookie("access_token", "", 0, "/", "", false, true)
+	cookie.AddAccessTokenCookie(c, 0, "")
 	c.Status(http.StatusNoContent)
 }

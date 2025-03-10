@@ -5,18 +5,19 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	"github.com/stonith404/pocket-id/backend/internal/common"
-	"github.com/stonith404/pocket-id/backend/internal/model"
-	"github.com/stonith404/pocket-id/backend/internal/utils/email"
+	"github.com/emersion/go-sasl"
+	"github.com/emersion/go-smtp"
+	"github.com/pocket-id/pocket-id/backend/internal/common"
+	"github.com/pocket-id/pocket-id/backend/internal/model"
+	"github.com/pocket-id/pocket-id/backend/internal/utils/email"
 	"gorm.io/gorm"
 	htemplate "html/template"
-	"io/fs"
 	"mime/multipart"
 	"mime/quotedprintable"
-	"net"
-	"net/smtp"
 	"net/textproto"
+	"os"
 	ttemplate "text/template"
+	"time"
 )
 
 type EmailService struct {
@@ -26,13 +27,13 @@ type EmailService struct {
 	textTemplates    map[string]*ttemplate.Template
 }
 
-func NewEmailService(appConfigService *AppConfigService, db *gorm.DB, templateDir fs.FS) (*EmailService, error) {
-	htmlTemplates, err := email.PrepareHTMLTemplates(templateDir, emailTemplatesPaths)
+func NewEmailService(appConfigService *AppConfigService, db *gorm.DB) (*EmailService, error) {
+	htmlTemplates, err := email.PrepareHTMLTemplates(emailTemplatesPaths)
 	if err != nil {
 		return nil, fmt.Errorf("prepare html templates: %w", err)
 	}
 
-	textTemplates, err := email.PrepareTextTemplates(templateDir, emailTemplatesPaths)
+	textTemplates, err := email.PrepareTextTemplates(emailTemplatesPaths)
 	if err != nil {
 		return nil, fmt.Errorf("prepare html templates: %w", err)
 	}
@@ -45,9 +46,9 @@ func NewEmailService(appConfigService *AppConfigService, db *gorm.DB, templateDi
 	}, nil
 }
 
-func (srv *EmailService) SendTestEmail() error {
+func (srv *EmailService) SendTestEmail(recipientUserId string) error {
 	var user model.User
-	if err := srv.db.First(&user).Error; err != nil {
+	if err := srv.db.First(&user, "id = ?", recipientUserId).Error; err != nil {
 		return err
 	}
 
@@ -59,11 +60,6 @@ func (srv *EmailService) SendTestEmail() error {
 }
 
 func SendEmail[V any](srv *EmailService, toEmail email.Address, template email.Template[V], tData *V) error {
-	// Check if SMTP settings are set
-	if srv.appConfigService.DbConfig.EmailEnabled.Value != "true" {
-		return errors.New("email not enabled")
-	}
-
 	data := &email.TemplateData[V]{
 		AppName: srv.appConfigService.DbConfig.AppName.Value,
 		LogoURL: common.EnvConfig.AppURL + "/api/application-configuration/logo",
@@ -90,48 +86,12 @@ func SendEmail[V any](srv *EmailService, toEmail email.Address, template email.T
 	)
 	c.Body(body)
 
-	// Set up the TLS configuration
-	tlsConfig := &tls.Config{
-		InsecureSkipVerify: srv.appConfigService.DbConfig.SmtpSkipCertVerify.Value == "true",
-		ServerName:         srv.appConfigService.DbConfig.SmtpHost.Value,
-	}
-
 	// Connect to the SMTP server
-	port := srv.appConfigService.DbConfig.SmtpPort.Value
-	smtpAddress := srv.appConfigService.DbConfig.SmtpHost.Value + ":" + port
-	var client *smtp.Client
-	if srv.appConfigService.DbConfig.SmtpTls.Value == "false" {
-		client, err = smtp.Dial(smtpAddress)
-	} else if port == "465" {
-		client, err = srv.connectToSmtpServerUsingImplicitTLS(
-			smtpAddress,
-			tlsConfig,
-		)
-	} else {
-		client, err = srv.connectToSmtpServerUsingStartTLS(
-			smtpAddress,
-			tlsConfig,
-		)
-	}
-	defer client.Quit()
+	client, err := srv.getSmtpClient()
 	if err != nil {
 		return fmt.Errorf("failed to connect to SMTP server: %w", err)
 	}
-
-	smtpUser := srv.appConfigService.DbConfig.SmtpUser.Value
-	smtpPassword := srv.appConfigService.DbConfig.SmtpPassword.Value
-
-	// Set up the authentication if user or password are set
-	if smtpUser != "" || smtpPassword != "" {
-		auth := smtp.PlainAuth("",
-			srv.appConfigService.DbConfig.SmtpUser.Value,
-			srv.appConfigService.DbConfig.SmtpPassword.Value,
-			srv.appConfigService.DbConfig.SmtpHost.Value,
-		)
-		if err := client.Auth(auth); err != nil {
-			return fmt.Errorf("failed to authenticate SMTP client: %w", err)
-		}
-	}
+	defer client.Close()
 
 	// Send the email
 	if err := srv.sendEmailContent(client, toEmail, c); err != nil {
@@ -141,57 +101,104 @@ func SendEmail[V any](srv *EmailService, toEmail email.Address, template email.T
 	return nil
 }
 
-func (srv *EmailService) connectToSmtpServerUsingImplicitTLS(serverAddr string, tlsConfig *tls.Config) (*smtp.Client, error) {
-	conn, err := tls.Dial("tcp", serverAddr, tlsConfig)
+func (srv *EmailService) getSmtpClient() (client *smtp.Client, err error) {
+	port := srv.appConfigService.DbConfig.SmtpPort.Value
+	smtpAddress := srv.appConfigService.DbConfig.SmtpHost.Value + ":" + port
+
+	tlsConfig := &tls.Config{
+		InsecureSkipVerify: srv.appConfigService.DbConfig.SmtpSkipCertVerify.Value == "true",
+		ServerName:         srv.appConfigService.DbConfig.SmtpHost.Value,
+	}
+
+	// Connect to the SMTP server based on TLS setting
+	switch srv.appConfigService.DbConfig.SmtpTls.Value {
+	case "none":
+		client, err = smtp.Dial(smtpAddress)
+	case "tls":
+		client, err = smtp.DialTLS(smtpAddress, tlsConfig)
+	case "starttls":
+		client, err = smtp.DialStartTLS(
+			smtpAddress,
+			tlsConfig,
+		)
+	default:
+		return nil, fmt.Errorf("invalid SMTP TLS setting: %s", srv.appConfigService.DbConfig.SmtpTls.Value)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to SMTP server: %w", err)
 	}
 
-	client, err := smtp.NewClient(conn, srv.appConfigService.DbConfig.SmtpHost.Value)
-	if err != nil {
-		conn.Close()
-		return nil, fmt.Errorf("failed to create SMTP client: %w", err)
+	client.CommandTimeout = 10 * time.Second
+
+	// Send the HELO command
+	if err := srv.sendHelloCommand(client); err != nil {
+		return nil, fmt.Errorf("failed to send HELO command: %w", err)
 	}
 
-	return client, nil
+	// Set up the authentication if user or password are set
+	smtpUser := srv.appConfigService.DbConfig.SmtpUser.Value
+	smtpPassword := srv.appConfigService.DbConfig.SmtpPassword.Value
+
+	if smtpUser != "" || smtpPassword != "" {
+		// Authenticate with plain auth
+		auth := sasl.NewPlainClient("", smtpUser, smtpPassword)
+		if err := client.Auth(auth); err != nil {
+			// If the server does not support plain auth, try login auth
+			var smtpErr *smtp.SMTPError
+			ok := errors.As(err, &smtpErr)
+			if ok && smtpErr.Code == smtp.ErrAuthUnknownMechanism.Code {
+				auth = sasl.NewLoginClient(smtpUser, smtpPassword)
+				err = client.Auth(auth)
+			}
+			// Both plain and login auth failed
+			if err != nil {
+				return nil, fmt.Errorf("failed to authenticate: %w", err)
+			}
+
+		}
+	}
+
+	return client, err
 }
 
-func (srv *EmailService) connectToSmtpServerUsingStartTLS(serverAddr string, tlsConfig *tls.Config) (*smtp.Client, error) {
-	conn, err := net.Dial("tcp", serverAddr)
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect to SMTP server: %w", err)
+func (srv *EmailService) sendHelloCommand(client *smtp.Client) error {
+	hostname, err := os.Hostname()
+	if err == nil {
+		if err := client.Hello(hostname); err != nil {
+			return err
+		}
 	}
-
-	client, err := smtp.NewClient(conn, srv.appConfigService.DbConfig.SmtpHost.Value)
-	if err != nil {
-		conn.Close()
-		return nil, fmt.Errorf("failed to create SMTP client: %w", err)
-	}
-
-	if err := client.StartTLS(tlsConfig); err != nil {
-		return nil, fmt.Errorf("failed to start TLS: %w", err)
-	}
-	return client, nil
+	return nil
 }
 
 func (srv *EmailService) sendEmailContent(client *smtp.Client, toEmail email.Address, c *email.Composer) error {
-	if err := client.Mail(srv.appConfigService.DbConfig.SmtpFrom.Value); err != nil {
+	// Set the sender
+	if err := client.Mail(srv.appConfigService.DbConfig.SmtpFrom.Value, nil); err != nil {
 		return fmt.Errorf("failed to set sender: %w", err)
 	}
-	if err := client.Rcpt(toEmail.Email); err != nil {
+
+	// Set the recipient
+	if err := client.Rcpt(toEmail.Email, nil); err != nil {
 		return fmt.Errorf("failed to set recipient: %w", err)
 	}
+
+	// Get a writer to write the email data
 	w, err := client.Data()
 	if err != nil {
 		return fmt.Errorf("failed to start data: %w", err)
 	}
+
+	// Write the email content
 	_, err = w.Write([]byte(c.String()))
 	if err != nil {
 		return fmt.Errorf("failed to write email data: %w", err)
 	}
+
+	// Close the writer
 	if err := w.Close(); err != nil {
 		return fmt.Errorf("failed to close data writer: %w", err)
 	}
+
 	return nil
 }
 

@@ -31,6 +31,13 @@ type TokenInvalidOrExpiredError struct{}
 func (e *TokenInvalidOrExpiredError) Error() string       { return "token is invalid or expired" }
 func (e *TokenInvalidOrExpiredError) HttpStatusCode() int { return 400 }
 
+type TokenInvalidError struct{}
+
+func (e *TokenInvalidError) Error() string {
+	return "Token is invalid"
+}
+func (e *TokenInvalidError) HttpStatusCode() int { return 400 }
+
 type OidcMissingAuthorizationError struct{}
 
 func (e *OidcMissingAuthorizationError) Error() string       { return "missing authorization" }
@@ -58,7 +65,9 @@ func (e *OidcInvalidAuthorizationCodeError) HttpStatusCode() int { return 400 }
 
 type OidcInvalidCallbackURLError struct{}
 
-func (e *OidcInvalidCallbackURLError) Error() string       { return "invalid callback URL, it might be necessary for an admin to fix this" }
+func (e *OidcInvalidCallbackURLError) Error() string {
+	return "invalid callback URL, it might be necessary for an admin to fix this"
+}
 func (e *OidcInvalidCallbackURLError) HttpStatusCode() int { return 400 }
 
 type FileTypeNotSupportedError struct{}
@@ -85,6 +94,11 @@ type NotSignedInError struct{}
 func (e *NotSignedInError) Error() string       { return "You are not signed in" }
 func (e *NotSignedInError) HttpStatusCode() int { return http.StatusUnauthorized }
 
+type MissingAccessToken struct{}
+
+func (e *MissingAccessToken) Error() string       { return "Missing access token" }
+func (e *MissingAccessToken) HttpStatusCode() int { return http.StatusUnauthorized }
+
 type MissingPermissionError struct{}
 
 func (e *MissingPermissionError) Error() string {
@@ -95,7 +109,7 @@ func (e *MissingPermissionError) HttpStatusCode() int { return http.StatusForbid
 type TooManyRequestsError struct{}
 
 func (e *TooManyRequestsError) Error() string {
-	return "Too many requests. Please wait a while before trying again."
+	return "Too many requests"
 }
 func (e *TooManyRequestsError) HttpStatusCode() int { return http.StatusTooManyRequests }
 
@@ -160,3 +174,53 @@ func (e *OidcMissingCodeChallengeError) Error() string {
 	return "Missing code challenge"
 }
 func (e *OidcMissingCodeChallengeError) HttpStatusCode() int { return http.StatusBadRequest }
+
+type LdapUserUpdateError struct{}
+
+func (e *LdapUserUpdateError) Error() string {
+	return "LDAP users can't be updated"
+}
+func (e *LdapUserUpdateError) HttpStatusCode() int { return http.StatusForbidden }
+
+type LdapUserGroupUpdateError struct{}
+
+func (e *LdapUserGroupUpdateError) Error() string {
+	return "LDAP user groups can't be updated"
+}
+func (e *LdapUserGroupUpdateError) HttpStatusCode() int { return http.StatusForbidden }
+
+type OidcAccessDeniedError struct{}
+
+func (e *OidcAccessDeniedError) Error() string {
+	return "You're not allowed to access this service"
+}
+func (e *OidcAccessDeniedError) HttpStatusCode() int { return http.StatusForbidden }
+
+type OidcClientIdNotMatchingError struct{}
+
+func (e *OidcClientIdNotMatchingError) Error() string {
+	return "Client id in request doesn't match client id in token"
+}
+func (e *OidcClientIdNotMatchingError) HttpStatusCode() int { return http.StatusBadRequest }
+
+type OidcNoCallbackURLError struct{}
+
+func (e *OidcNoCallbackURLError) Error() string {
+	return "No callback URL provided"
+}
+func (e *OidcNoCallbackURLError) HttpStatusCode() int { return http.StatusBadRequest }
+
+type UiConfigDisabledError struct{}
+
+func (e *UiConfigDisabledError) Error() string {
+	return "The configuration can't be changed since the UI configuration is disabled"
+}
+func (e *UiConfigDisabledError) HttpStatusCode() int { return http.StatusForbidden }
+
+type InvalidUUIDError struct{}
+
+func (e *InvalidUUIDError) Error() string {
+	return "Invalid UUID"
+}
+
+type InvalidEmailError struct{}

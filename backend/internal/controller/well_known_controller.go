@@ -1,10 +1,11 @@
 package controller
 
 import (
-	"github.com/gin-gonic/gin"
-	"github.com/stonith404/pocket-id/backend/internal/common"
-	"github.com/stonith404/pocket-id/backend/internal/service"
 	"net/http"
+
+	"github.com/gin-gonic/gin"
+	"github.com/pocket-id/pocket-id/backend/internal/common"
+	"github.com/pocket-id/pocket-id/backend/internal/service"
 )
 
 func NewWellKnownController(group *gin.RouterGroup, jwtService *service.JwtService) {
@@ -34,9 +35,10 @@ func (wkc *WellKnownController) openIDConfigurationHandler(c *gin.Context) {
 		"authorization_endpoint":                appUrl + "/authorize",
 		"token_endpoint":                        appUrl + "/api/oidc/token",
 		"userinfo_endpoint":                     appUrl + "/api/oidc/userinfo",
+		"end_session_endpoint":                  appUrl + "/api/oidc/end-session",
 		"jwks_uri":                              appUrl + "/.well-known/jwks.json",
-		"scopes_supported":                      []string{"openid", "profile", "email"},
-		"claims_supported":                      []string{"sub", "given_name", "family_name", "name", "email", "email_verified", "preferred_username"},
+		"scopes_supported":                      []string{"openid", "profile", "email", "groups"},
+		"claims_supported":                      []string{"sub", "given_name", "family_name", "name", "email", "email_verified", "preferred_username", "picture", "groups"},
 		"response_types_supported":              []string{"code", "id_token"},
 		"subject_types_supported":               []string{"public"},
 		"id_token_signing_alg_values_supported": []string{"RS256"},

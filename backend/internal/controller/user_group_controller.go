@@ -2,12 +2,12 @@ package controller
 
 import (
 	"net/http"
-	"strconv"
 
 	"github.com/gin-gonic/gin"
-	"github.com/stonith404/pocket-id/backend/internal/dto"
-	"github.com/stonith404/pocket-id/backend/internal/middleware"
-	"github.com/stonith404/pocket-id/backend/internal/service"
+	"github.com/pocket-id/pocket-id/backend/internal/dto"
+	"github.com/pocket-id/pocket-id/backend/internal/middleware"
+	"github.com/pocket-id/pocket-id/backend/internal/service"
+	"github.com/pocket-id/pocket-id/backend/internal/utils"
 )
 
 func NewUserGroupController(group *gin.RouterGroup, jwtAuthMiddleware *middleware.JwtAuthMiddleware, userGroupService *service.UserGroupService) {
@@ -28,16 +28,20 @@ type UserGroupController struct {
 }
 
 func (ugc *UserGroupController) list(c *gin.Context) {
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	pageSize, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
 	searchTerm := c.Query("search")
+	var sortedPaginationRequest utils.SortedPaginationRequest
+	if err := c.ShouldBindQuery(&sortedPaginationRequest); err != nil {
+		c.Error(err)
+		return
+	}
 
-	groups, pagination, err := ugc.UserGroupService.List(searchTerm, page, pageSize)
+	groups, pagination, err := ugc.UserGroupService.List(searchTerm, sortedPaginationRequest)
 	if err != nil {
 		c.Error(err)
 		return
 	}
 
+	// Map the user groups to DTOs. The user count can't be mapped directly, so we have to do it manually.
 	var groupsDto = make([]dto.UserGroupDtoWithUserCount, len(groups))
 	for i, group := range groups {
 		var groupDto dto.UserGroupDtoWithUserCount
@@ -104,7 +108,7 @@ func (ugc *UserGroupController) update(c *gin.Context) {
 		return
 	}
 
-	group, err := ugc.UserGroupService.Update(c.Param("id"), input)
+	group, err := ugc.UserGroupService.Update(c.Param("id"), input, false)
 	if err != nil {
 		c.Error(err)
 		return
@@ -135,7 +139,7 @@ func (ugc *UserGroupController) updateUsers(c *gin.Context) {
 		return
 	}
 
-	group, err := ugc.UserGroupService.UpdateUsers(c.Param("id"), input)
+	group, err := ugc.UserGroupService.UpdateUsers(c.Param("id"), input.UserIDs)
 	if err != nil {
 		c.Error(err)
 		return

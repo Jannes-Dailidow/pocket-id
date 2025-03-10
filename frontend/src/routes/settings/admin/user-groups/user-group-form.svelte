@@ -1,6 +1,7 @@
 <script lang="ts">
-	import FormInput from '$lib/components/form-input.svelte';
+	import FormInput from '$lib/components/form/form-input.svelte';
 	import { Button } from '$lib/components/ui/button';
+	import appConfigStore from '$lib/stores/application-configuration-store';
 	import type { UserGroupCreate } from '$lib/types/user-group.type';
 	import { createForm } from '$lib/utils/form-util';
 	import { z } from 'zod';
@@ -14,6 +15,7 @@
 	} = $props();
 
 	let isLoading = $state(false);
+	let inputDisabled = $derived(!!existingUserGroup?.ldapId && $appConfigStore.ldapEnabled);
 	let hasManualNameEdit = $state(!!existingUserGroup?.friendlyName);
 
 	const userGroup = {
@@ -22,12 +24,8 @@
 	};
 
 	const formSchema = z.object({
-		friendlyName: z.string().min(2).max(30),
-		name: z
-			.string()
-			.min(2)
-			.max(30)
-			.regex(/^[a-z0-9_]+$/, 'Name can only contain lowercase letters, numbers, and underscores')
+		friendlyName: z.string().min(2).max(50),
+		name: z.string().min(2).max(255)
 	});
 	type FormSchema = typeof formSchema;
 
@@ -58,25 +56,27 @@
 </script>
 
 <form onsubmit={onSubmit}>
-	<div class="flex flex-col gap-3 sm:flex-row">
-		<div class="w-full">
-			<FormInput
-				label="Friendly Name"
-				description="Name that will be displayed in the UI"
-				bind:input={$inputs.friendlyName}
-				onInput={onFriendlyNameInput}
-			/>
+	<fieldset disabled={inputDisabled}>
+		<div class="flex flex-col gap-3 sm:flex-row">
+			<div class="w-full">
+				<FormInput
+					label="Friendly Name"
+					description="Name that will be displayed in the UI"
+					bind:input={$inputs.friendlyName}
+					onInput={onFriendlyNameInput}
+				/>
+			</div>
+			<div class="w-full">
+				<FormInput
+					label="Name"
+					description={`Name that will be in the "groups" claim`}
+					bind:input={$inputs.name}
+					onInput={onNameInput}
+				/>
+			</div>
 		</div>
-		<div class="w-full">
-			<FormInput
-				label="Name"
-				description={`Name that will be in the "groups" claim`}
-				bind:input={$inputs.name}
-				onInput={onNameInput}
-			/>
+		<div class="mt-5 flex justify-end">
+			<Button {isLoading} type="submit">Save</Button>
 		</div>
-	</div>
-	<div class="mt-5 flex justify-end">
-		<Button {isLoading} type="submit">Save</Button>
-	</div>
+	</fieldset>
 </form>

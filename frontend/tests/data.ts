@@ -25,7 +25,8 @@ export const oidcClients = {
 	nextcloud: {
 		id: '3654a746-35d4-4321-ac61-0bdcff2b4055',
 		name: 'Nextcloud',
-		callbackUrl: 'http://nextcloud/auth/callback'
+		callbackUrl: 'http://nextcloud/auth/callback',
+		logoutCallbackUrl: 'http://nextcloud/auth/logout/callback'
 	},
 	immich: {
 		id: '606c7782-f2b1-49e5-8ea9-26eb1b06d018',
@@ -55,3 +56,8 @@ export const userGroups = {
 		name: 'human_resources'
 	}
 };
+
+export const oneTimeAccessTokens = [
+	{ token: 'HPe6k6uiDRRVuAQV', expired: false },
+	{ token: 'YCGDtftvsvYWiXd0', expired: true }
+];

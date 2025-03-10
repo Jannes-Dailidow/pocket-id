@@ -8,8 +8,8 @@
 	import userStore from '$lib/stores/user-store';
 	import { getWebauthnErrorMessage } from '$lib/utils/error-util';
 	import { startAuthentication } from '@simplewebauthn/browser';
-	import { AxiosError } from 'axios';
 	import { LucideMail, LucideUser, LucideUsers } from 'lucide-svelte';
+	import { onMount } from 'svelte';
 	import { slide } from 'svelte/transition';
 	import type { PageData } from './$types';
 	import ClientProviderImages from './components/client-provider-images.svelte';
@@ -22,9 +22,16 @@
 	let success = false;
 	let errorMessage: string | null = null;
 	let authorizationRequired = false;
+	let authorizationConfirmed = false;
 
 	export let data: PageData;
-	let { scope, nonce, client, state, callbackURL, codeChallenge, codeChallengeMethod  } = data;
+	let { scope, nonce, client, state, callbackURL, codeChallenge, codeChallengeMethod } = data;
+
+	onMount(() => {
+		if ($userStore) {
+			authorize();
+		}
+	});
 
 	async function authorize() {
 		isLoading = true;
@@ -33,29 +40,21 @@
 			if (!$userStore?.id) {
 				const loginOptions = await webauthnService.getLoginOptions();
 				const authResponse = await startAuthentication(loginOptions);
-				await webauthnService.finishLogin(authResponse);
+				const user = await webauthnService.finishLogin(authResponse);
+				userStore.setUser(user);
+			}
+
+			if (!authorizationConfirmed) {
+				authorizationRequired = await oidService.isAuthorizationRequired(client!.id, scope);
+				if (authorizationRequired) {
+					isLoading = false;
+					authorizationConfirmed = true;
+					return;
+				}
 			}
 
 			await oidService
 				.authorize(client!.id, scope, callbackURL, nonce, codeChallenge, codeChallengeMethod)
-				.then(async ({ code, callbackURL }) => {
-					onSuccess(code, callbackURL);
-				});
-		} catch (e) {
-			if (e instanceof AxiosError && e.response?.status === 403) {
-				authorizationRequired = true;
-			} else {
-				errorMessage = getWebauthnErrorMessage(e);
-			}
-			isLoading = false;
-		}
-	}
-
-	async function authorizeNewClient() {
-		isLoading = true;
-		try {
-			await oidService
-				.authorizeNewClient(client!.id, scope, callbackURL, nonce, codeChallenge, codeChallengeMethod)
 				.then(async ({ code, callbackURL }) => {
 					onSuccess(code, callbackURL);
 				});
@@ -68,7 +67,11 @@
 	function onSuccess(code: string, callbackURL: string) {
 		success = true;
 		setTimeout(() => {
-			window.location.href = `${callbackURL}?code=${code}&state=${state}`;
+			const redirectURL = new URL(callbackURL);
+			redirectURL.searchParams.append('code', code);
+			redirectURL.searchParams.append('state', state);
+
+			window.location.href = redirectURL.toString();
 		}, 1000);
 	}
 </script>
@@ -80,12 +83,12 @@
 {#if client == null}
 	<p>Client not found</p>
 {:else}
-	<SignInWrapper>
+	<SignInWrapper showEmailOneTimeAccessButton={$appConfigStore.emailOneTimeAccessEnabled}>
 		<ClientProviderImages {client} {success} error={!!errorMessage} />
 		<h1 class="font-playfair mt-5 text-3xl font-bold sm:text-4xl">Sign in to {client.name}</h1>
 		{#if errorMessage}
 			<p class="text-muted-foreground mb-10 mt-2">
-				{errorMessage}. Please try again.
+				{errorMessage}.
 			</p>
 		{/if}
 		{#if !authorizationRequired && !errorMessage}
@@ -125,16 +128,10 @@
 				</Card.Root>
 			</div>
 		{/if}
-		<div class="flex justify-center gap-2">
+		<div class="flex w-full justify-stretch gap-2">
 			<Button onclick={() => history.back()} class="w-full" variant="secondary">Cancel</Button>
 			{#if !errorMessage}
-				<Button
-					class="w-full"
-					{isLoading}
-					on:click={authorizationRequired ? authorizeNewClient : authorize}
-				>
-					Sign in
-				</Button>
+				<Button class="w-full" {isLoading} on:click={authorize}>Sign in</Button>
 			{:else}
 				<Button class="w-full" on:click={() => (errorMessage = null)}>Try again</Button>
 			{/if}

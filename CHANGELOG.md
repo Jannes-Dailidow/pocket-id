@@ -1,3 +1,295 @@
+## [](https://github.com/pocket-id/pocket-id/compare/v0.35.6...v) (2025-03-06)
+
+
+### Features
+
+* display groups on the account page ([#296](https://github.com/pocket-id/pocket-id/issues/296)) ([0f14a93](https://github.com/pocket-id/pocket-id/commit/0f14a93e1d6a723b0994ba475b04702646f04464))
+* enable sd_notify support ([#277](https://github.com/pocket-id/pocket-id/issues/277)) ([91f254c](https://github.com/pocket-id/pocket-id/commit/91f254c7bb067646c42424c5c62ebcd90a0c8792))
+
+
+### Bug Fixes
+
+* default sorting on tables ([#299](https://github.com/pocket-id/pocket-id/issues/299)) ([ff34e3b](https://github.com/pocket-id/pocket-id/commit/ff34e3b925321c80e9d7d42d0fd50e397d198435))
+
+## [](https://github.com/pocket-id/pocket-id/compare/v0.35.5...v) (2025-03-03)
+
+
+### Bug Fixes
+
+* support `LOGIN` authentication method for SMTP ([#292](https://github.com/pocket-id/pocket-id/issues/292)) ([2d733fc](https://github.com/pocket-id/pocket-id/commit/2d733fc79faefca23d54b22768029c3ba3427410))
+
+## [](https://github.com/pocket-id/pocket-id/compare/v0.35.4...v) (2025-03-03)
+
+
+### Bug Fixes
+
+* profile picture orientation if image is rotated with EXIF ([1026ee4](https://github.com/pocket-id/pocket-id/commit/1026ee4f5b5c7fda78b65c94a5d0f899525defd1))
+
+## [](https://github.com/pocket-id/pocket-id/compare/v0.35.3...v) (2025-03-01)
+
+
+### Bug Fixes
+
+* add `groups` scope and claim to well known endpoint ([4bafee4](https://github.com/pocket-id/pocket-id/commit/4bafee4f58f5a76898cf66d6192916d405eea389))
+* profile picture of other user can't be updated ([#273](https://github.com/pocket-id/pocket-id/issues/273)) ([ef25f6b](https://github.com/pocket-id/pocket-id/commit/ef25f6b6b84b52f1310d366d40aa3769a6fe9bef))
+* support POST for OIDC userinfo endpoint ([1652cc6](https://github.com/pocket-id/pocket-id/commit/1652cc65f3f966d018d81a1ae22abb5ff1b4c47b))
+
+## [](https://github.com/pocket-id/pocket-id/compare/v0.35.2...v) (2025-02-25)
+
+
+### Bug Fixes
+
+* add option to manually select SMTP TLS method ([#268](https://github.com/pocket-id/pocket-id/issues/268)) ([01a9de0](https://github.com/pocket-id/pocket-id/commit/01a9de0b04512c62d0f223de33d711f93c49b9cc))
+* **ldap:** sync error if LDAP user collides with an existing user ([fde951b](https://github.com/pocket-id/pocket-id/commit/fde951b543281fedf9f602abae26b50881e3d157))
+
+## [](https://github.com/pocket-id/pocket-id/compare/v0.35.1...v) (2025-02-24)
+
+
+### Bug Fixes
+
+* delete profile picture if user gets deleted ([9a167d4](https://github.com/pocket-id/pocket-id/commit/9a167d4076872e5e3e5d78d2a66ef7203ca5261b))
+* updating profile picture of other user updates own profile picture ([887c5e4](https://github.com/pocket-id/pocket-id/commit/887c5e462a50c8fb579ca6804f1a643d8af78fe8))
+
+## [](https://github.com/pocket-id/pocket-id/compare/v0.35.0...v) (2025-02-22)
+
+
+### Bug Fixes
+
+* add validation that `PUBLIC_APP_URL` can't contain a path ([a6ae7ae](https://github.com/pocket-id/pocket-id/commit/a6ae7ae28713f7fc8018ae2aa7572986df3e1a5b))
+* binary profile picture can't be imported from LDAP ([840a672](https://github.com/pocket-id/pocket-id/commit/840a672fc35ca8476caf86d7efaba9d54bce86aa))
+
+## [](https://github.com/pocket-id/pocket-id/compare/v0.34.0...v) (2025-02-19)
+
+
+### Features
+
+* add ability to upload a profile picture ([#244](https://github.com/pocket-id/pocket-id/issues/244)) ([652ee6a](https://github.com/pocket-id/pocket-id/commit/652ee6ad5d6c46f0d35c955ff7bb9bdac6240ca6))
+
+
+### Bug Fixes
+
+* app config strings starting with a number are parsed incorrectly ([816c198](https://github.com/pocket-id/pocket-id/commit/816c198a42c189cb1f2d94885d2e3623e47e2848))
+* emails do not get rendered correctly in Gmail ([dca9e7a](https://github.com/pocket-id/pocket-id/commit/dca9e7a11a3ba5d3b43a937f11cb9d16abad2db5))
+
+## [](https://github.com/pocket-id/pocket-id/compare/v0.33.0...v) (2025-02-16)
+
+
+### Features
+
+* add LDAP group membership attribute ([#236](https://github.com/pocket-id/pocket-id/issues/236)) ([39b46e9](https://github.com/pocket-id/pocket-id/commit/39b46e99a9b930ea39cf640c3080530cfff5be6e))
+
+## [](https://github.com/pocket-id/pocket-id/compare/v0.32.0...v) (2025-02-14)
+
+
+### Features
+
+* add end session endpoint ([#232](https://github.com/pocket-id/pocket-id/issues/232)) ([7550333](https://github.com/pocket-id/pocket-id/commit/7550333fe2ff6424f3168f63c5179d76767532fd))
+
+
+### Bug Fixes
+
+* alignment of OIDC client details ([c3980d3](https://github.com/pocket-id/pocket-id/commit/c3980d3d28a7158a4dc9369af41f185b891e485e))
+* layout of OIDC client details page on mobile ([3de1301](https://github.com/pocket-id/pocket-id/commit/3de1301fa84b3ab4fff4242d827c7794d44910f2))
+* show  "Sync Now" and "Test Email" button even if UI config is disabled ([4d0fff8](https://github.com/pocket-id/pocket-id/commit/4d0fff821e2245050ce631b4465969510466dfae))
+
+## [](https://github.com/pocket-id/pocket-id/compare/v0.31.0...v) (2025-02-13)
+
+
+### Features
+
+* add ability to set custom Geolite DB URL ([2071d00](https://github.com/pocket-id/pocket-id/commit/2071d002fc5c3b5ff7a3fca6a5c99f5517196853))
+
+## [](https://github.com/pocket-id/pocket-id/compare/v0.30.0...v) (2025-02-12)
+
+
+### Features
+
+* add ability to override the UI configuration with environment variables ([4e85842](https://github.com/pocket-id/pocket-id/commit/4e858420e9d9713e19f3b35c45c882403717f72f))
+* add warning for only having one passkey configured ([#220](https://github.com/pocket-id/pocket-id/issues/220)) ([39e403d](https://github.com/pocket-id/pocket-id/commit/39e403d00f3870f9e960427653a1d9697da27a6f))
+* display source in user and group table ([#225](https://github.com/pocket-id/pocket-id/issues/225)) ([9ed2adb](https://github.com/pocket-id/pocket-id/commit/9ed2adb0f8da13725fd9a4ef6a7798c377d13513))
+
+
+### Bug Fixes
+
+* user linking in ldap group sync ([#222](https://github.com/pocket-id/pocket-id/issues/222)) ([2d78349](https://github.com/pocket-id/pocket-id/commit/2d78349b381d7ca10f47d3c03cef685a576b1b49))
+
+## [](https://github.com/pocket-id/pocket-id/compare/v0.29.0...v) (2025-02-08)
+
+
+### Features
+
+* add custom ldap search filters ([#216](https://github.com/pocket-id/pocket-id/issues/216)) ([626f87d](https://github.com/pocket-id/pocket-id/commit/626f87d59211f4129098b91dc1d020edb4aca692))
+* update host configuration to allow external access ([#218](https://github.com/pocket-id/pocket-id/issues/218)) ([bea1158](https://github.com/pocket-id/pocket-id/commit/bea115866fd8e4b15d3281c422d2fb72312758b1))
+
+## [](https://github.com/pocket-id/pocket-id/compare/v0.28.1...v) (2025-02-05)
+
+
+### Features
+
+* add JSON support in custom claims ([15cde6a](https://github.com/pocket-id/pocket-id/commit/15cde6ac66bc857ac28df545a37c1f4341977595))
+* add option to disable Caddy in the Docker container ([e864d5d](https://github.com/pocket-id/pocket-id/commit/e864d5dcbff1ef28dc6bf120e4503093a308c5c8))
+
+## [](https://github.com/stonith404/pocket-id/compare/v0.28.0...v) (2025-02-04)
+
+
+### Bug Fixes
+
+* don't return error page if version info fetching failed ([d06257e](https://github.com/stonith404/pocket-id/commit/d06257ec9b5e46e25e40c174b4bef02dca0a1ea3))
+
+## [](https://github.com/stonith404/pocket-id/compare/v0.27.2...v) (2025-02-03)
+
+
+### Features
+
+* allow LDAP users and groups to be deleted if LDAP gets disabled ([9ab1787](https://github.com/stonith404/pocket-id/commit/9ab178712aa3cc71546a89226e67b7ba91245251))
+* map allowed groups to OIDC clients ([#202](https://github.com/stonith404/pocket-id/issues/202)) ([13b02a0](https://github.com/stonith404/pocket-id/commit/13b02a072f20ce10e12fd8b897cbf42a908f3291))
+
+
+### Bug Fixes
+
+* **caddy:** trusted_proxies for IPv6 enabled hosts ([#189](https://github.com/stonith404/pocket-id/issues/189)) ([37a835b](https://github.com/stonith404/pocket-id/commit/37a835b44e308622f6862de494738dd2bfb58ef0))
+* missing user service dependency ([61e71ad](https://github.com/stonith404/pocket-id/commit/61e71ad43b8f0f498133d3eb2381382e7bc642b9))
+* non LDAP user group can't be updated after update ([ecd74b7](https://github.com/stonith404/pocket-id/commit/ecd74b794f1ffb7da05bce0046fb8d096b039409))
+* use cursor pointer on clickable elements ([7798580](https://github.com/stonith404/pocket-id/commit/77985800ae9628104e03e7f2e803b7ed9eaaf4e0))
+
+## [](https://github.com/stonith404/pocket-id/compare/v0.27.1...v) (2025-01-27)
+
+
+### Bug Fixes
+
+* smtp hello for tls connections ([#180](https://github.com/stonith404/pocket-id/issues/180)) ([781ff7a](https://github.com/stonith404/pocket-id/commit/781ff7ae7b84b13892e7a565b7a78f20c52ee2c9))
+
+## [](https://github.com/stonith404/pocket-id/compare/v0.27.0...v) (2025-01-24)
+
+
+### Bug Fixes
+
+* add `__HOST` prefix to cookies ([#175](https://github.com/stonith404/pocket-id/issues/175)) ([164ce6a](https://github.com/stonith404/pocket-id/commit/164ce6a3d7fa8ae5275c94302952cf318e3b3113))
+* send hostname derived from `PUBLIC_APP_URL` with SMTP EHLO command ([397544c](https://github.com/stonith404/pocket-id/commit/397544c0f3f2b49f1f34ae53e6b9daf194d1ae28))
+* use OS hostname for SMTP EHLO message ([47c39f6](https://github.com/stonith404/pocket-id/commit/47c39f6d382c496cb964262adcf76cc8dbb96da3))
+
+## [](https://github.com/stonith404/pocket-id/compare/v0.26.0...v) (2025-01-22)
+
+
+### Features
+
+* display private IP ranges correctly in audit log ([#139](https://github.com/stonith404/pocket-id/issues/139)) ([72923bb](https://github.com/stonith404/pocket-id/commit/72923bb86dc5d07d56aea98cf03320667944b553))
+
+
+### Bug Fixes
+
+* add save changes dialog before sending test email ([#165](https://github.com/stonith404/pocket-id/issues/165)) ([d02f475](https://github.com/stonith404/pocket-id/commit/d02f4753f3fbda75cd415ebbfe0702765c38c144))
+* ensure the downloaded GeoLite2 DB is not corrupted & prevent RW race condition ([#138](https://github.com/stonith404/pocket-id/issues/138)) ([f7710f2](https://github.com/stonith404/pocket-id/commit/f7710f298898d322885c1c83680e26faaa0bb800))
+
+## [](https://github.com/stonith404/pocket-id/compare/v0.25.1...v) (2025-01-20)
+
+
+### Features
+
+* support wildcard callback URLs ([8a1db0c](https://github.com/stonith404/pocket-id/commit/8a1db0cb4a5d4b32b4fdc19d41fff688a7c71a56))
+
+
+### Bug Fixes
+
+* non LDAP users get created with a empty LDAP ID string ([3f02d08](https://github.com/stonith404/pocket-id/commit/3f02d081098ad2caaa60a56eea4705639f80d01f))
+
+## [](https://github.com/stonith404/pocket-id/compare/v0.25.0...v) (2025-01-19)
+
+
+### Bug Fixes
+
+* disable account details inputs if user is imported from LDAP ([a8b9d60](https://github.com/stonith404/pocket-id/commit/a8b9d60a86e80c10d6fba07072b1d32cec400ecb))
+
+## [](https://github.com/stonith404/pocket-id/compare/v0.24.1...v) (2025-01-19)
+
+
+### Features
+
+* add LDAP sync ([#106](https://github.com/stonith404/pocket-id/issues/106)) ([5101b14](https://github.com/stonith404/pocket-id/commit/5101b14eec68a9507e1730994178d0ebe8185876))
+* allow sign in with email ([#100](https://github.com/stonith404/pocket-id/issues/100)) ([06b90ed](https://github.com/stonith404/pocket-id/commit/06b90eddd645cce57813f2536e4a6a8836548f2b))
+* automatically authorize client if signed in ([d5dd118](https://github.com/stonith404/pocket-id/commit/d5dd118a3f4ad6eed9ca496c458201bb10f148a0))
+
+
+### Bug Fixes
+
+* always set secure on cookie ([#130](https://github.com/stonith404/pocket-id/issues/130)) ([fda08ac](https://github.com/stonith404/pocket-id/commit/fda08ac1cd88842e25dc47395ed1288a5cfac4f8))
+* don't panic if LDAP sync fails on startup ([e284e35](https://github.com/stonith404/pocket-id/commit/e284e352e2b95fac1d098de3d404e8531de4b869))
+* improve spacing of checkboxes on application configuration page ([090eca2](https://github.com/stonith404/pocket-id/commit/090eca202d198852e6fbf4e6bebaf3b5ada13944))
+* search input not displayed if response hasn't any items ([05a98eb](https://github.com/stonith404/pocket-id/commit/05a98ebe87d7a88e8b96b144c53250a40d724ec3))
+* session duration ignored in cookie expiration ([bc8f454](https://github.com/stonith404/pocket-id/commit/bc8f454ea173ecc60e06450a1d22e24207f76714))
+
+## [](https://github.com/stonith404/pocket-id/compare/v0.24.0...v) (2025-01-13)
+
+
+### Bug Fixes
+
+* audit log table overflow if row data is long ([4d337a2](https://github.com/stonith404/pocket-id/commit/4d337a20c5cb92ef80bb7402f9b99b08e3ad0b6b))
+* optional arguments not working with `create-one-time-access-token.sh` ([8885571](https://github.com/stonith404/pocket-id/commit/888557171d61589211b10f70dce405126216ad61))
+* remove restrictive validation for group names ([be6e25a](https://github.com/stonith404/pocket-id/commit/be6e25a167de8bf07075b46f09d9fc1fa6c74426))
+
+## [](https://github.com/stonith404/pocket-id/compare/v0.23.0...v) (2025-01-11)
+
+
+### Features
+
+* add sorting for tables ([fd69830](https://github.com/stonith404/pocket-id/commit/fd69830c2681985e4fd3c5336a2b75c9fb7bc5d4))
+
+
+### Bug Fixes
+
+* pkce state not correctly reflected in oidc client info ([61d18a9](https://github.com/stonith404/pocket-id/commit/61d18a9d1b167ff59a59523ff00d00ca8f23258d))
+* send test email to the user that has requested it ([a649c4b](https://github.com/stonith404/pocket-id/commit/a649c4b4a543286123f4d1f3c411fe1a7e2c6d71))
+
+## [](https://github.com/stonith404/pocket-id/compare/v0.22.0...v) (2025-01-03)
+
+
+### Features
+
+* add PKCE for non public clients ([adcf3dd](https://github.com/stonith404/pocket-id/commit/adcf3ddc6682794e136a454ef9e69ddd130626a8))
+* use same table component for OIDC client list as all other lists ([2d31fc2](https://github.com/stonith404/pocket-id/commit/2d31fc2cc9201bb93d296faae622f52c6dcdfebc))
+
+## [](https://github.com/stonith404/pocket-id/compare/v0.21.0...v) (2025-01-01)
+
+
+### Features
+
+* add warning if passkeys missing ([2d0bd8d](https://github.com/stonith404/pocket-id/commit/2d0bd8dcbfb73650b7829cb66f40decb284bd73b))
+
+
+### Bug Fixes
+
+* allow first and last name of user to be between 1 and 50 characters ([1ff20ca](https://github.com/stonith404/pocket-id/commit/1ff20caa3ccd651f9fb30f958ffb807dfbbcbd8a))
+* hash in callback url is incorrectly appended ([f6f2736](https://github.com/stonith404/pocket-id/commit/f6f2736bba65eee017f2d8cdaa70621574092869))
+* make user validation consistent between pages ([333a1a1](https://github.com/stonith404/pocket-id/commit/333a1a18d59f675111f4ed106fa5614ef563c6f4))
+* passkey can't be added if `PUBLIC_APP_URL` includes a port ([0729ce9](https://github.com/stonith404/pocket-id/commit/0729ce9e1a8dab9912900a01dcd0fbd892718a1a))
+
+## [](https://github.com/stonith404/pocket-id/compare/v0.20.1...v) (2024-12-17)
+
+
+### Features
+
+* improve error state design for login page ([0716c38](https://github.com/stonith404/pocket-id/commit/0716c38fb8ce7fa719c7fe0df750bdb213786c21))
+
+
+### Bug Fixes
+
+* OIDC client logo gets removed if other properties get updated ([789d939](https://github.com/stonith404/pocket-id/commit/789d9394a533831e7e2fb8dc3f6b338787336ad8))
+
+## [](https://github.com/stonith404/pocket-id/compare/v0.20.0...v) (2024-12-13)
+
+
+### Bug Fixes
+
+* `create-one-time-access-token.sh` script not compatible with postgres ([34e3519](https://github.com/stonith404/pocket-id/commit/34e35193f9f3813f6248e60f15080d753e8da7ae))
+* wrong date time datatype used for read operations with Postgres ([bad901e](https://github.com/stonith404/pocket-id/commit/bad901ea2b661aadd286e5e4bed317e73bd8a70d))
+
+## [](https://github.com/stonith404/pocket-id/compare/v0.19.0...v) (2024-12-12)
+
+
+### Features
+
+* add support for Postgres database provider ([#79](https://github.com/stonith404/pocket-id/issues/79)) ([9d20a98](https://github.com/stonith404/pocket-id/commit/9d20a98dbbc322fa6f0644e8b31e6b97769887ce))
+
 ## [](https://github.com/stonith404/pocket-id/compare/v0.18.0...v) (2024-11-29)
 
 

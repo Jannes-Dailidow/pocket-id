@@ -37,32 +37,28 @@
 		<main
 			class="mx-auto flex w-full max-w-[1640px] flex-col gap-x-4 gap-y-10 p-4 md:p-10 lg:flex-row"
 		>
-			<div>
+			<div class="min-w-[200px] xl:min-w-[250px]">
 				<div class="mx-auto grid w-full gap-2">
 					<h1 class="mb-5 text-3xl font-semibold">Settings</h1>
 				</div>
-				<div
-					class="mx-auto grid items-start gap-6 md:grid-cols-[180px_1fr] lg:grid-cols-[250px_1fr]"
-				>
-					<nav class="text-muted-foreground grid gap-4 text-sm">
-						{#each links as { href, label }}
-							<a {href} class={$page.url.pathname.startsWith(href) ? 'text-primary font-bold' : ''}>
-								{label}
-							</a>
-						{/each}
-						{#if $userStore?.isAdmin && !versionInformation.isUpToDate}
-							<a
-								href="https://github.com/stonith404/pocket-id/releases/latest"
-								target="_blank"
-								class="flex items-center gap-2"
-							>
-								Update Pocket ID <LucideExternalLink class="my-auto inline-block h-3 w-3" />
-							</a>
-						{/if}
-					</nav>
-				</div>
+				<nav class="text-muted-foreground grid gap-4 text-sm">
+					{#each links as { href, label }}
+						<a {href} class={$page.url.pathname.startsWith(href) ? 'text-primary font-bold' : ''}>
+							{label}
+						</a>
+					{/each}
+					{#if $userStore?.isAdmin && versionInformation.isUpToDate === false}
+						<a
+							href="https://github.com/pocket-id/pocket-id/releases/latest"
+							target="_blank"
+							class="flex items-center gap-2"
+						>
+							Update Pocket ID <LucideExternalLink class="my-auto inline-block h-3 w-3" />
+						</a>
+					{/if}
+				</nav>
 			</div>
-			<div class="flex w-full flex-col gap-5">
+			<div class="flex w-full flex-col gap-5 overflow-x-hidden">
 				{@render children()}
 			</div>
 		</main>
@@ -70,7 +66,7 @@
 			<p class="text-muted-foreground py-3 text-xs">
 				Powered by <a
 					class="text-foreground"
-					href="https://github.com/stonith404/pocket-id"
+					href="https://github.com/pocket-id/pocket-id"
 					target="_blank">Pocket ID</a
 				>
 				({versionInformation.currentVersion})

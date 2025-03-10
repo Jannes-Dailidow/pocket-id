@@ -11,13 +11,7 @@ export default class AppConfigService extends APIService {
 		}
 
 		const { data } = await this.api.get<AppConfigRawResponse>(url);
-
-		const appConfig: Partial<AllAppConfig> = {};
-		data.forEach(({ key, value }) => {
-			(appConfig as any)[key] = this.parseValue(value);
-		});
-
-		return appConfig as AllAppConfig;
+		return this.parseConfigList(data);
 	}
 
 	async update(appConfig: AllAppConfig) {
@@ -27,7 +21,7 @@ export default class AppConfigService extends APIService {
 			(appConfigConvertedToString as any)[key] = (appConfig as any)[key].toString();
 		}
 		const res = await this.api.put('/application-configuration', appConfigConvertedToString);
-		return res.data as AllAppConfig;
+		return this.parseConfigList(res.data);
 	}
 
 	async updateFavicon(favicon: File) {
@@ -57,13 +51,24 @@ export default class AppConfigService extends APIService {
 		await this.api.post('/application-configuration/test-email');
 	}
 
-	async getVersionInformation() {
-		const response = (
-			await axios.get('https://api.github.com/repos/stonith404/pocket-id/releases/latest')
-		).data;
+	async syncLdap() {
+		await this.api.post('/application-configuration/sync-ldap');
+	}
 
-		const newestVersion = response.tag_name.replace('v', '');
-		const isUpToDate = newestVersion === currentVersion;
+	async getVersionInformation() {
+		const response = await axios
+			.get('https://api.github.com/repos/pocket-id/pocket-id/releases/latest', {
+				timeout: 2000
+			})
+			.then((res) => res.data)
+			.catch(() => null);
+
+		let newestVersion: string | null = null;
+		let isUpToDate: boolean | null = null;
+		if (response) {
+			newestVersion = response.tag_name.replace('v', '');
+			isUpToDate = newestVersion === currentVersion;
+		}
 
 		return {
 			isUpToDate,
@@ -72,12 +77,21 @@ export default class AppConfigService extends APIService {
 		};
 	}
 
+	private parseConfigList(data: AppConfigRawResponse) {
+		const appConfig: Partial<AllAppConfig> = {};
+		data.forEach(({ key, value }) => {
+			(appConfig as any)[key] = this.parseValue(value);
+		});
+
+		return appConfig as AllAppConfig;
+	}
+
 	private parseValue(value: string) {
 		if (value === 'true') {
 			return true;
 		} else if (value === 'false') {
 			return false;
-		} else if (!isNaN(parseFloat(value))) {
+		} else if (/^-?\d+(\.\d+)?$/.test(value)) {
 			return parseFloat(value);
 		} else {
 			return value;

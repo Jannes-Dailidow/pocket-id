@@ -2,15 +2,22 @@ package bootstrap
 
 import (
 	"errors"
-	"github.com/golang-migrate/migrate/v4"
-	"github.com/golang-migrate/migrate/v4/database/sqlite3"
-	"github.com/stonith404/pocket-id/backend/internal/common"
-	"gorm.io/driver/sqlite"
-	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
+	"fmt"
 	"log"
 	"os"
 	"time"
+
+	"github.com/golang-migrate/migrate/v4"
+	"github.com/golang-migrate/migrate/v4/database"
+	postgresMigrate "github.com/golang-migrate/migrate/v4/database/postgres"
+	sqliteMigrate "github.com/golang-migrate/migrate/v4/database/sqlite3"
+	"github.com/golang-migrate/migrate/v4/source/iofs"
+	"github.com/pocket-id/pocket-id/backend/internal/common"
+	"github.com/pocket-id/pocket-id/backend/resources"
+	"gorm.io/driver/postgres"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
 func newDatabase() (db *gorm.DB) {
@@ -19,37 +26,67 @@ func newDatabase() (db *gorm.DB) {
 		log.Fatalf("failed to connect to database: %v", err)
 	}
 	sqlDb, err := db.DB()
-	sqlDb.SetMaxOpenConns(1)
 	if err != nil {
 		log.Fatalf("failed to get sql.DB: %v", err)
 	}
 
-	driver, err := sqlite3.WithInstance(sqlDb, &sqlite3.Config{})
-	m, err := migrate.NewWithDatabaseInstance(
-		"file://migrations",
-		"postgres", driver)
+	// Choose the correct driver for the database provider
+	var driver database.Driver
+	switch common.EnvConfig.DbProvider {
+	case common.DbProviderSqlite:
+		driver, err = sqliteMigrate.WithInstance(sqlDb, &sqliteMigrate.Config{})
+	case common.DbProviderPostgres:
+		driver, err = postgresMigrate.WithInstance(sqlDb, &postgresMigrate.Config{})
+	default:
+		log.Fatalf("unsupported database provider: %s", common.EnvConfig.DbProvider)
+	}
 	if err != nil {
-		log.Fatalf("failed to create migration instance: %v", err)
+		log.Fatalf("failed to create migration driver: %v", err)
 	}
 
-	err = m.Up()
-	if err != nil && !errors.Is(err, migrate.ErrNoChange) {
-		log.Fatalf("failed to apply migrations: %v", err)
+	// Run migrations
+	if err := migrateDatabase(driver); err != nil {
+		log.Fatalf("failed to run migrations: %v", err)
 	}
 
 	return db
 }
 
-func connectDatabase() (db *gorm.DB, err error) {
-	dbPath := common.EnvConfig.DBPath
+func migrateDatabase(driver database.Driver) error {
+	// Use the embedded migrations
+	source, err := iofs.New(resources.FS, "migrations/"+string(common.EnvConfig.DbProvider))
+	if err != nil {
+		return fmt.Errorf("failed to create embedded migration source: %v", err)
+	}
 
-	// Use in-memory database for testing
-	if common.EnvConfig.AppEnv == "test" {
-		dbPath = "file::memory:?cache=shared"
+	m, err := migrate.NewWithInstance("iofs", source, "pocket-id", driver)
+	if err != nil {
+		return fmt.Errorf("failed to create migration instance: %v", err)
+	}
+
+	err = m.Up()
+	if err != nil && !errors.Is(err, migrate.ErrNoChange) {
+		return fmt.Errorf("failed to apply migrations: %v", err)
+	}
+
+	return nil
+}
+
+func connectDatabase() (db *gorm.DB, err error) {
+	var dialector gorm.Dialector
+
+	// Choose the correct database provider
+	switch common.EnvConfig.DbProvider {
+	case common.DbProviderSqlite:
+		dialector = sqlite.Open(common.EnvConfig.SqliteDBPath)
+	case common.DbProviderPostgres:
+		dialector = postgres.Open(common.EnvConfig.PostgresConnectionString)
+	default:
+		return nil, fmt.Errorf("unsupported database provider: %s", common.EnvConfig.DbProvider)
 	}
 
 	for i := 1; i <= 3; i++ {
-		db, err = gorm.Open(sqlite.Open(dbPath), &gorm.Config{
+		db, err = gorm.Open(dialector, &gorm.Config{
 			TranslateError: true,
 			Logger:         getLogger(),
 		})

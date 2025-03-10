@@ -1,11 +1,13 @@
 <script lang="ts">
 	import AdvancedTable from '$lib/components/advanced-table.svelte';
 	import { openConfirmDialog } from '$lib/components/confirm-dialog/';
+	import { Badge } from '$lib/components/ui/badge/index';
 	import { Button } from '$lib/components/ui/button';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import * as Table from '$lib/components/ui/table';
 	import UserGroupService from '$lib/services/user-group-service';
-	import type { Paginated } from '$lib/types/pagination.type';
+	import appConfigStore from '$lib/stores/application-configuration-store';
+	import type { Paginated, SearchPaginationSortRequest } from '$lib/types/pagination.type';
 	import type { UserGroup, UserGroupWithUserCount } from '$lib/types/user-group.type';
 	import { axiosErrorToast } from '$lib/utils/error-util';
 	import { LucidePencil, LucideTrash } from 'lucide-svelte';
@@ -16,6 +18,13 @@
 		$props();
 
 	let userGroups = $state<Paginated<UserGroupWithUserCount>>(initialUserGroups);
+	let requestOptions: SearchPaginationSortRequest | undefined = $state({
+		sort: { column: 'friendlyName', direction: 'asc' },
+		pagination: {
+			page: initialUserGroups.pagination.currentPage,
+			limit: initialUserGroups.pagination.itemsPerPage
+		}
+	});
 
 	const userGroupService = new UserGroupService();
 
@@ -29,26 +38,40 @@
 				action: async () => {
 					try {
 						await userGroupService.remove(userGroup.id);
-						userGroups = await userGroupService.list();
+						userGroups = await userGroupService.list(requestOptions!);
+						toast.success('User group deleted successfully');
 					} catch (e) {
 						axiosErrorToast(e);
 					}
-					toast.success('User group deleted successfully');
 				}
 			}
 		});
 	}
-
-	async function fetchItems(search: string, page: number, limit: number) {
-		return userGroupService.list(search, { page, limit });
-	}
 </script>
 
-<AdvancedTable items={userGroups} {fetchItems} columns={['Friendly Name', 'Name', 'User Count', {label: "Actions", hidden: true}]}>
+<AdvancedTable
+	items={userGroups}
+	onRefresh={async (o) => (userGroups = await userGroupService.list(o))}
+	{requestOptions}
+	defaultSort={{ column: 'friendlyName', direction: 'asc' }}
+	columns={[
+		{ label: 'Friendly Name', sortColumn: 'friendlyName' },
+		{ label: 'Name', sortColumn: 'name' },
+		{ label: 'User Count', sortColumn: 'userCount' },
+		...($appConfigStore.ldapEnabled ? [{ label: 'Source' }] : []),
+		{ label: 'Actions', hidden: true }
+	]}
+>
 	{#snippet rows({ item })}
 		<Table.Cell>{item.friendlyName}</Table.Cell>
 		<Table.Cell>{item.name}</Table.Cell>
 		<Table.Cell>{item.userCount}</Table.Cell>
+		{#if $appConfigStore.ldapEnabled}
+			<Table.Cell>
+				<Badge variant={item.ldapId ? 'default' : 'outline'}>{item.ldapId ? 'LDAP' : 'Local'}</Badge
+				>
+			</Table.Cell>
+		{/if}
 		<Table.Cell class="flex justify-end">
 			<DropdownMenu.Root>
 				<DropdownMenu.Trigger asChild let:builder>
@@ -61,11 +84,13 @@
 					<DropdownMenu.Item href="/settings/admin/user-groups/{item.id}"
 						><LucidePencil class="mr-2 h-4 w-4" /> Edit</DropdownMenu.Item
 					>
-					<DropdownMenu.Item
-						class="text-red-500 focus:!text-red-700"
-						on:click={() => deleteUserGroup(item)}
-						><LucideTrash class="mr-2 h-4 w-4" />Delete</DropdownMenu.Item
-					>
+					{#if !item.ldapId || !$appConfigStore.ldapEnabled}
+						<DropdownMenu.Item
+							class="text-red-500 focus:!text-red-700"
+							on:click={() => deleteUserGroup(item)}
+							><LucideTrash class="mr-2 h-4 w-4" />Delete</DropdownMenu.Item
+						>
+					{/if}
 				</DropdownMenu.Content>
 			</DropdownMenu.Root>
 		</Table.Cell>

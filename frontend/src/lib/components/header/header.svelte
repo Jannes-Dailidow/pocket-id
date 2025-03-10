@@ -5,9 +5,10 @@
 	import Logo from '../logo.svelte';
 	import HeaderAvatar from './header-avatar.svelte';
 
+	const authUrls = [/^\/authorize$/, /^\/login(?:\/.*)?$/, /^\/logout$/];
+
 	let isAuthPage = $derived(
-		!$page.error &&
-			($page.url.pathname.startsWith('/authorize') || $page.url.pathname.startsWith('/login'))
+		!$page.error && authUrls.some((pattern) => pattern.test($page.url.pathname))
 	);
 </script>
 
@@ -19,7 +20,7 @@
 	>
 		<div class="flex h-16 items-center">
 			{#if !isAuthPage}
-				<Logo class="mr-3 h-10 w-10" />
+				<Logo class="mr-3 h-8 w-8" />
 				<h1 class="text-lg font-medium" data-testid="application-name">
 					{$appConfigStore.appName}
 				</h1>

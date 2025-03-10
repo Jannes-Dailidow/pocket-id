@@ -4,15 +4,17 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"errors"
-	"github.com/go-webauthn/webauthn/protocol"
 	"time"
+
+	"github.com/go-webauthn/webauthn/protocol"
+	datatype "github.com/pocket-id/pocket-id/backend/internal/model/types"
 )
 
 type WebauthnSession struct {
 	Base
 
 	Challenge        string
-	ExpiresAt        time.Time
+	ExpiresAt        datatype.DateTime
 	UserVerification string
 }
 
@@ -20,7 +22,7 @@ type WebauthnCredential struct {
 	Base
 
 	Name            string
-	CredentialID    string
+	CredentialID    []byte
 	PublicKey       []byte
 	AttestationType string
 	Transport       AuthenticatorTransportList

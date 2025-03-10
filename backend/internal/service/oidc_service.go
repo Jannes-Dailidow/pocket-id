@@ -3,20 +3,22 @@ package service
 import (
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/stonith404/pocket-id/backend/internal/common"
-	"github.com/stonith404/pocket-id/backend/internal/dto"
-	"github.com/stonith404/pocket-id/backend/internal/model"
-	datatype "github.com/stonith404/pocket-id/backend/internal/model/types"
-	"github.com/stonith404/pocket-id/backend/internal/utils"
-	"golang.org/x/crypto/bcrypt"
-	"gorm.io/gorm"
 	"mime/multipart"
 	"os"
-	"slices"
+	"regexp"
 	"strings"
 	"time"
+
+	"github.com/pocket-id/pocket-id/backend/internal/common"
+	"github.com/pocket-id/pocket-id/backend/internal/dto"
+	"github.com/pocket-id/pocket-id/backend/internal/model"
+	datatype "github.com/pocket-id/pocket-id/backend/internal/model/types"
+	"github.com/pocket-id/pocket-id/backend/internal/utils"
+	"golang.org/x/crypto/bcrypt"
+	"gorm.io/gorm"
 )
 
 type OidcService struct {
@@ -38,69 +40,109 @@ func NewOidcService(db *gorm.DB, jwtService *JwtService, appConfigService *AppCo
 }
 
 func (s *OidcService) Authorize(input dto.AuthorizeOidcClientRequestDto, userID, ipAddress, userAgent string) (string, string, error) {
-	var userAuthorizedOIDCClient model.UserAuthorizedOidcClient
-	s.db.Preload("Client").First(&userAuthorizedOIDCClient, "client_id = ? AND user_id = ?", input.ClientID, userID)
-
-	if userAuthorizedOIDCClient.Client.IsPublic && input.CodeChallenge == "" {
-		return "", "", &common.OidcMissingCodeChallengeError{}
-	}
-
-	if userAuthorizedOIDCClient.Scope != input.Scope {
-		return "", "", &common.OidcMissingAuthorizationError{}
-	}
-
-	callbackURL, err := s.getCallbackURL(userAuthorizedOIDCClient.Client, input.CallbackURL)
-	if err != nil {
-		return "", "", err
-	}
-
-	code, err := s.createAuthorizationCode(input.ClientID, userID, input.Scope, input.Nonce, input.CodeChallenge, input.CodeChallengeMethod)
-	if err != nil {
-		return "", "", err
-	}
-
-	s.auditLogService.Create(model.AuditLogEventClientAuthorization, ipAddress, userAgent, userID, model.AuditLogData{"clientName": userAuthorizedOIDCClient.Client.Name})
-
-	return code, callbackURL, nil
-}
-
-func (s *OidcService) AuthorizeNewClient(input dto.AuthorizeOidcClientRequestDto, userID, ipAddress, userAgent string) (string, string, error) {
 	var client model.OidcClient
-	if err := s.db.First(&client, "id = ?", input.ClientID).Error; err != nil {
+	if err := s.db.Preload("AllowedUserGroups").First(&client, "id = ?", input.ClientID).Error; err != nil {
 		return "", "", err
 	}
 
+	// If the client is not public, the code challenge must be provided
 	if client.IsPublic && input.CodeChallenge == "" {
 		return "", "", &common.OidcMissingCodeChallengeError{}
 	}
 
-	callbackURL, err := s.getCallbackURL(client, input.CallbackURL)
+	// Get the callback URL of the client. Return an error if the provided callback URL is not allowed
+	callbackURL, err := s.getCallbackURL(client.CallbackURLs, input.CallbackURL)
 	if err != nil {
 		return "", "", err
 	}
 
-	userAuthorizedClient := model.UserAuthorizedOidcClient{
-		UserID:   userID,
-		ClientID: input.ClientID,
-		Scope:    input.Scope,
+	// Check if the user group is allowed to authorize the client
+	var user model.User
+	if err := s.db.Preload("UserGroups").First(&user, "id = ?", userID).Error; err != nil {
+		return "", "", err
 	}
 
-	if err := s.db.Create(&userAuthorizedClient).Error; err != nil {
-		if errors.Is(err, gorm.ErrDuplicatedKey) {
-			err = s.db.Model(&userAuthorizedClient).Update("scope", input.Scope).Error
-		} else {
-			return "", "", err
+	if !s.IsUserGroupAllowedToAuthorize(user, client) {
+		return "", "", &common.OidcAccessDeniedError{}
+	}
+
+	// Check if the user has already authorized the client with the given scope
+	hasAuthorizedClient, err := s.HasAuthorizedClient(input.ClientID, userID, input.Scope)
+	if err != nil {
+		return "", "", err
+	}
+
+	// If the user has not authorized the client, create a new authorization in the database
+	if !hasAuthorizedClient {
+		userAuthorizedClient := model.UserAuthorizedOidcClient{
+			UserID:   userID,
+			ClientID: input.ClientID,
+			Scope:    input.Scope,
+		}
+
+		if err := s.db.Create(&userAuthorizedClient).Error; err != nil {
+			if errors.Is(err, gorm.ErrDuplicatedKey) {
+				// The client has already been authorized but with a different scope so we need to update the scope
+				if err := s.db.Model(&userAuthorizedClient).Update("scope", input.Scope).Error; err != nil {
+					return "", "", err
+				}
+			} else {
+				return "", "", err
+			}
 		}
 	}
 
+	// Create the authorization code
 	code, err := s.createAuthorizationCode(input.ClientID, userID, input.Scope, input.Nonce, input.CodeChallenge, input.CodeChallengeMethod)
 	if err != nil {
 		return "", "", err
 	}
 
-	s.auditLogService.Create(model.AuditLogEventNewClientAuthorization, ipAddress, userAgent, userID, model.AuditLogData{"clientName": client.Name})
+	// Log the authorization event
+	if hasAuthorizedClient {
+		s.auditLogService.Create(model.AuditLogEventClientAuthorization, ipAddress, userAgent, userID, model.AuditLogData{"clientName": client.Name})
+	} else {
+		s.auditLogService.Create(model.AuditLogEventNewClientAuthorization, ipAddress, userAgent, userID, model.AuditLogData{"clientName": client.Name})
+
+	}
 
 	return code, callbackURL, nil
+}
+
+// HasAuthorizedClient checks if the user has already authorized the client with the given scope
+func (s *OidcService) HasAuthorizedClient(clientID, userID, scope string) (bool, error) {
+	var userAuthorizedOidcClient model.UserAuthorizedOidcClient
+	if err := s.db.First(&userAuthorizedOidcClient, "client_id = ? AND user_id = ?", clientID, userID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return false, nil
+		}
+		return false, err
+	}
+
+	if userAuthorizedOidcClient.Scope != scope {
+		return false, nil
+	}
+
+	return true, nil
+}
+
+// IsUserGroupAllowedToAuthorize checks if the user group of the user is allowed to authorize the client
+func (s *OidcService) IsUserGroupAllowedToAuthorize(user model.User, client model.OidcClient) bool {
+	if len(client.AllowedUserGroups) == 0 {
+		return true
+	}
+
+	isAllowedToAuthorize := false
+	for _, userGroup := range client.AllowedUserGroups {
+		for _, userGroupUser := range user.UserGroups {
+			if userGroup.ID == userGroupUser.ID {
+				isAllowedToAuthorize = true
+				break
+			}
+		}
+	}
+
+	return isAllowedToAuthorize
 }
 
 func (s *OidcService) CreateTokens(code, grantType, clientID, clientSecret, codeVerifier string) (string, string, error) {
@@ -131,8 +173,8 @@ func (s *OidcService) CreateTokens(code, grantType, clientID, clientSecret, code
 		return "", "", &common.OidcInvalidAuthorizationCodeError{}
 	}
 
-	// If the client is public, the code verifier must match the code challenge
-	if client.IsPublic {
+	// If the client is public or PKCE is enabled, the code verifier must match the code challenge
+	if client.IsPublic || client.PkceEnabled {
 		if !s.validateCodeVerifier(codeVerifier, *authorizationCodeMetaData.CodeChallenge, *authorizationCodeMetaData.CodeChallengeMethodSha256) {
 			return "", "", &common.OidcInvalidCodeVerifierError{}
 		}
@@ -161,13 +203,13 @@ func (s *OidcService) CreateTokens(code, grantType, clientID, clientSecret, code
 
 func (s *OidcService) GetClient(clientID string) (model.OidcClient, error) {
 	var client model.OidcClient
-	if err := s.db.Preload("CreatedBy").First(&client, "id = ?", clientID).Error; err != nil {
+	if err := s.db.Preload("CreatedBy").Preload("AllowedUserGroups").First(&client, "id = ?", clientID).Error; err != nil {
 		return model.OidcClient{}, err
 	}
 	return client, nil
 }
 
-func (s *OidcService) ListClients(searchTerm string, page int, pageSize int) ([]model.OidcClient, utils.PaginationResponse, error) {
+func (s *OidcService) ListClients(searchTerm string, sortedPaginationRequest utils.SortedPaginationRequest) ([]model.OidcClient, utils.PaginationResponse, error) {
 	var clients []model.OidcClient
 
 	query := s.db.Preload("CreatedBy").Model(&model.OidcClient{})
@@ -176,7 +218,7 @@ func (s *OidcService) ListClients(searchTerm string, page int, pageSize int) ([]
 		query = query.Where("name LIKE ?", searchPattern)
 	}
 
-	pagination, err := utils.Paginate(page, pageSize, query, &clients)
+	pagination, err := utils.PaginateAndSort(sortedPaginationRequest, query, &clients)
 	if err != nil {
 		return nil, utils.PaginationResponse{}, err
 	}
@@ -186,9 +228,12 @@ func (s *OidcService) ListClients(searchTerm string, page int, pageSize int) ([]
 
 func (s *OidcService) CreateClient(input dto.OidcClientCreateDto, userID string) (model.OidcClient, error) {
 	client := model.OidcClient{
-		Name:         input.Name,
-		CallbackURLs: input.CallbackURLs,
-		CreatedByID:  userID,
+		Name:               input.Name,
+		CallbackURLs:       input.CallbackURLs,
+		LogoutCallbackURLs: input.LogoutCallbackURLs,
+		CreatedByID:        userID,
+		IsPublic:           input.IsPublic,
+		PkceEnabled:        input.IsPublic || input.PkceEnabled,
 	}
 
 	if err := s.db.Create(&client).Error; err != nil {
@@ -206,7 +251,9 @@ func (s *OidcService) UpdateClient(clientID string, input dto.OidcClientCreateDt
 
 	client.Name = input.Name
 	client.CallbackURLs = input.CallbackURLs
+	client.LogoutCallbackURLs = input.LogoutCallbackURLs
 	client.IsPublic = input.IsPublic
+	client.PkceEnabled = input.IsPublic || input.PkceEnabled
 
 	if err := s.db.Save(&client).Error; err != nil {
 		return model.OidcClient{}, err
@@ -354,6 +401,7 @@ func (s *OidcService) GetUserClaimsForClient(userID string, clientID string) (ma
 		"family_name":        user.LastName,
 		"name":               user.FullName(),
 		"preferred_username": user.Username,
+		"picture":            fmt.Sprintf("%s/api/users/%s/profile-picture.png", common.EnvConfig.AppURL, user.ID),
 	}
 
 	if strings.Contains(scope, "profile") {
@@ -369,7 +417,16 @@ func (s *OidcService) GetUserClaimsForClient(userID string, clientID string) (ma
 		}
 
 		for _, customClaim := range customClaims {
-			claims[customClaim.Key] = customClaim.Value
+			// The value of the custom claim can be a JSON object or a string
+			var jsonValue interface{}
+			json.Unmarshal([]byte(customClaim.Value), &jsonValue)
+			if jsonValue != nil {
+				// It's JSON so we store it as an object
+				claims[customClaim.Key] = jsonValue
+			} else {
+				// Marshalling failed, so we store it as a string
+				claims[customClaim.Key] = customClaim.Value
+			}
 		}
 	}
 	if strings.Contains(scope, "email") {
@@ -377,6 +434,73 @@ func (s *OidcService) GetUserClaimsForClient(userID string, clientID string) (ma
 	}
 
 	return claims, nil
+}
+
+func (s *OidcService) UpdateAllowedUserGroups(id string, input dto.OidcUpdateAllowedUserGroupsDto) (client model.OidcClient, err error) {
+	client, err = s.GetClient(id)
+	if err != nil {
+		return model.OidcClient{}, err
+	}
+
+	// Fetch the user groups based on UserGroupIDs in input
+	var groups []model.UserGroup
+	if len(input.UserGroupIDs) > 0 {
+		if err := s.db.Where("id IN (?)", input.UserGroupIDs).Find(&groups).Error; err != nil {
+			return model.OidcClient{}, err
+		}
+	}
+
+	// Replace the current user groups with the new set of user groups
+	if err := s.db.Model(&client).Association("AllowedUserGroups").Replace(groups); err != nil {
+		return model.OidcClient{}, err
+	}
+
+	// Save the updated client
+	if err := s.db.Save(&client).Error; err != nil {
+		return model.OidcClient{}, err
+	}
+
+	return client, nil
+}
+
+// ValidateEndSession returns the logout callback URL for the client if all the validations pass
+func (s *OidcService) ValidateEndSession(input dto.OidcLogoutDto, userID string) (string, error) {
+	// If no ID token hint is provided, return an error
+	if input.IdTokenHint == "" {
+		return "", &common.TokenInvalidError{}
+	}
+
+	// If the ID token hint is provided, verify the ID token
+	claims, err := s.jwtService.VerifyIdToken(input.IdTokenHint)
+	if err != nil {
+		return "", &common.TokenInvalidError{}
+	}
+
+	// If the client ID is provided check if the client ID in the ID token matches the client ID in the request
+	if input.ClientId != "" && claims.Audience[0] != input.ClientId {
+		return "", &common.OidcClientIdNotMatchingError{}
+	}
+
+	clientId := claims.Audience[0]
+
+	// Check if the user has authorized the client before
+	var userAuthorizedOIDCClient model.UserAuthorizedOidcClient
+	if err := s.db.Preload("Client").First(&userAuthorizedOIDCClient, "client_id = ? AND user_id = ?", clientId, userID).Error; err != nil {
+		return "", &common.OidcMissingAuthorizationError{}
+	}
+
+	// If the client has no logout callback URLs, return an error
+	if len(userAuthorizedOIDCClient.Client.LogoutCallbackURLs) == 0 {
+		return "", &common.OidcNoCallbackURLError{}
+	}
+
+	callbackURL, err := s.getCallbackURL(userAuthorizedOIDCClient.Client.LogoutCallbackURLs, input.PostLogoutRedirectUri)
+	if err != nil {
+		return "", err
+	}
+
+	return callbackURL, nil
+
 }
 
 func (s *OidcService) createAuthorizationCode(clientID string, userID string, scope string, nonce string, codeChallenge string, codeChallengeMethod string) (string, error) {
@@ -406,6 +530,10 @@ func (s *OidcService) createAuthorizationCode(clientID string, userID string, sc
 }
 
 func (s *OidcService) validateCodeVerifier(codeVerifier, codeChallenge string, codeChallengeMethodSha256 bool) bool {
+	if codeVerifier == "" || codeChallenge == "" {
+		return false
+	}
+
 	if !codeChallengeMethodSha256 {
 		return codeVerifier == codeChallenge
 	}
@@ -421,12 +549,20 @@ func (s *OidcService) validateCodeVerifier(codeVerifier, codeChallenge string, c
 	return encodedVerifierHash == codeChallenge
 }
 
-func (s *OidcService) getCallbackURL(client model.OidcClient, inputCallbackURL string) (callbackURL string, err error) {
+func (s *OidcService) getCallbackURL(urls []string, inputCallbackURL string) (callbackURL string, err error) {
 	if inputCallbackURL == "" {
-		return client.CallbackURLs[0], nil
+		return urls[0], nil
 	}
-	if slices.Contains(client.CallbackURLs, inputCallbackURL) {
-		return inputCallbackURL, nil
+
+	for _, callbackPattern := range urls {
+		regexPattern := strings.ReplaceAll(regexp.QuoteMeta(callbackPattern), `\*`, ".*") + "$"
+		matched, err := regexp.MatchString(regexPattern, inputCallbackURL)
+		if err != nil {
+			return "", err
+		}
+		if matched {
+			return inputCallbackURL, nil
+		}
 	}
 
 	return "", &common.OidcInvalidCallbackURLError{}

@@ -2,15 +2,16 @@ package service
 
 import (
 	"fmt"
-	"github.com/stonith404/pocket-id/backend/internal/common"
-	"github.com/stonith404/pocket-id/backend/internal/dto"
-	"github.com/stonith404/pocket-id/backend/internal/model"
-	"github.com/stonith404/pocket-id/backend/internal/utils"
-	"gorm.io/gorm"
 	"log"
 	"mime/multipart"
 	"os"
 	"reflect"
+
+	"github.com/pocket-id/pocket-id/backend/internal/common"
+	"github.com/pocket-id/pocket-id/backend/internal/dto"
+	"github.com/pocket-id/pocket-id/backend/internal/model"
+	"github.com/pocket-id/pocket-id/backend/internal/utils"
+	"gorm.io/gorm"
 )
 
 type AppConfigService struct {
@@ -26,10 +27,12 @@ func NewAppConfigService(db *gorm.DB) *AppConfigService {
 	if err := service.InitDbConfig(); err != nil {
 		log.Fatalf("Failed to initialize app config service: %v", err)
 	}
+
 	return service
 }
 
 var defaultDbConfig = model.AppConfig{
+	// General
 	AppName: model.AppConfigVariable{
 		Key:          "appName",
 		Type:         "string",
@@ -52,6 +55,7 @@ var defaultDbConfig = model.AppConfig{
 		IsPublic:     true,
 		DefaultValue: "true",
 	},
+	// Internal
 	BackgroundImageType: model.AppConfigVariable{
 		Key:          "backgroundImageType",
 		Type:         "string",
@@ -70,11 +74,7 @@ var defaultDbConfig = model.AppConfig{
 		IsInternal:   true,
 		DefaultValue: "svg",
 	},
-	EmailEnabled: model.AppConfigVariable{
-		Key:          "emailEnabled",
-		Type:         "bool",
-		DefaultValue: "false",
-	},
+	// Email
 	SmtpHost: model.AppConfigVariable{
 		Key:  "smtpHost",
 		Type: "string",
@@ -97,27 +97,127 @@ var defaultDbConfig = model.AppConfig{
 	},
 	SmtpTls: model.AppConfigVariable{
 		Key:          "smtpTls",
-		Type:         "bool",
-		DefaultValue: "true",
+		Type:         "string",
+		DefaultValue: "none",
 	},
 	SmtpSkipCertVerify: model.AppConfigVariable{
 		Key:          "smtpSkipCertVerify",
 		Type:         "bool",
 		DefaultValue: "false",
 	},
+	EmailLoginNotificationEnabled: model.AppConfigVariable{
+		Key:          "emailLoginNotificationEnabled",
+		Type:         "bool",
+		DefaultValue: "false",
+	},
+	EmailOneTimeAccessEnabled: model.AppConfigVariable{
+		Key:          "emailOneTimeAccessEnabled",
+		Type:         "bool",
+		IsPublic:     true,
+		DefaultValue: "false",
+	},
+	// LDAP
+	LdapEnabled: model.AppConfigVariable{
+		Key:          "ldapEnabled",
+		Type:         "bool",
+		IsPublic:     true,
+		DefaultValue: "false",
+	},
+	LdapUrl: model.AppConfigVariable{
+		Key:  "ldapUrl",
+		Type: "string",
+	},
+	LdapBindDn: model.AppConfigVariable{
+		Key:  "ldapBindDn",
+		Type: "string",
+	},
+	LdapBindPassword: model.AppConfigVariable{
+		Key:  "ldapBindPassword",
+		Type: "string",
+	},
+	LdapBase: model.AppConfigVariable{
+		Key:  "ldapBase",
+		Type: "string",
+	},
+	LdapUserSearchFilter: model.AppConfigVariable{
+		Key:          "ldapUserSearchFilter",
+		Type:         "string",
+		DefaultValue: "(objectClass=person)",
+	},
+	LdapUserGroupSearchFilter: model.AppConfigVariable{
+		Key:          "ldapUserGroupSearchFilter",
+		Type:         "string",
+		DefaultValue: "(objectClass=groupOfNames)",
+	},
+	LdapSkipCertVerify: model.AppConfigVariable{
+		Key:          "ldapSkipCertVerify",
+		Type:         "bool",
+		DefaultValue: "false",
+	},
+	LdapAttributeUserUniqueIdentifier: model.AppConfigVariable{
+		Key:  "ldapAttributeUserUniqueIdentifier",
+		Type: "string",
+	},
+	LdapAttributeUserUsername: model.AppConfigVariable{
+		Key:  "ldapAttributeUserUsername",
+		Type: "string",
+	},
+	LdapAttributeUserEmail: model.AppConfigVariable{
+		Key:  "ldapAttributeUserEmail",
+		Type: "string",
+	},
+	LdapAttributeUserFirstName: model.AppConfigVariable{
+		Key:  "ldapAttributeUserFirstName",
+		Type: "string",
+	},
+	LdapAttributeUserLastName: model.AppConfigVariable{
+		Key:  "ldapAttributeUserLastName",
+		Type: "string",
+	},
+	LdapAttributeUserProfilePicture: model.AppConfigVariable{
+		Key:  "ldapAttributeUserProfilePicture",
+		Type: "string",
+	},
+	LdapAttributeGroupMember: model.AppConfigVariable{
+		Key:          "ldapAttributeGroupMember",
+		Type:         "string",
+		DefaultValue: "member",
+	},
+	LdapAttributeGroupUniqueIdentifier: model.AppConfigVariable{
+		Key:  "ldapAttributeGroupUniqueIdentifier",
+		Type: "string",
+	},
+	LdapAttributeGroupName: model.AppConfigVariable{
+		Key:  "ldapAttributeGroupName",
+		Type: "string",
+	},
+	LdapAttributeAdminGroup: model.AppConfigVariable{
+		Key:  "ldapAttributeAdminGroup",
+		Type: "string",
+	},
 }
 
 func (s *AppConfigService) UpdateAppConfig(input dto.AppConfigUpdateDto) ([]model.AppConfigVariable, error) {
-	var savedConfigVariables []model.AppConfigVariable
+	if common.EnvConfig.UiConfigDisabled {
+		return nil, &common.UiConfigDisabledError{}
+	}
 
 	tx := s.db.Begin()
 	rt := reflect.ValueOf(input).Type()
 	rv := reflect.ValueOf(input)
 
+	var savedConfigVariables []model.AppConfigVariable
 	for i := 0; i < rt.NumField(); i++ {
 		field := rt.Field(i)
 		key := field.Tag.Get("json")
 		value := rv.FieldByName(field.Name).String()
+
+		// If the emailEnabled is set to false, disable the emailOneTimeAccessEnabled
+		if key == s.DbConfig.EmailOneTimeAccessEnabled.Key {
+			if rv.FieldByName("EmailEnabled").String() == "false" {
+				value = "false"
+			}
+		}
 
 		var appConfigVariable model.AppConfigVariable
 		if err := tx.First(&appConfigVariable, "key = ? AND is_internal = false", key).Error; err != nil {
@@ -167,9 +267,13 @@ func (s *AppConfigService) ListAppConfig(showAll bool) ([]model.AppConfigVariabl
 		return nil, err
 	}
 
-	// Set the value to the default value if it is empty
 	for i := range configuration {
-		if configuration[i].Value == "" && configuration[i].DefaultValue != "" {
+		if common.EnvConfig.UiConfigDisabled {
+			// Set the value to the environment variable if the UI config is disabled
+			configuration[i].Value = s.getConfigVariableFromEnvironmentVariable(configuration[i].Key, configuration[i].DefaultValue)
+
+		} else if configuration[i].Value == "" && configuration[i].DefaultValue != "" {
+			// Set the value to the default value if it is empty
 			configuration[i].Value = configuration[i].DefaultValue
 		}
 	}
@@ -268,12 +372,25 @@ func (s *AppConfigService) LoadDbConfigFromDb() error {
 			return err
 		}
 
-		if storedConfigVar.Value == "" && storedConfigVar.DefaultValue != "" {
+		if common.EnvConfig.UiConfigDisabled {
+			storedConfigVar.Value = s.getConfigVariableFromEnvironmentVariable(currentConfigVar.Key, storedConfigVar.DefaultValue)
+		} else if storedConfigVar.Value == "" && storedConfigVar.DefaultValue != "" {
 			storedConfigVar.Value = storedConfigVar.DefaultValue
 		}
 
 		dbConfigField.Set(reflect.ValueOf(storedConfigVar))
+
 	}
 
 	return nil
+}
+
+func (s *AppConfigService) getConfigVariableFromEnvironmentVariable(key, fallbackValue string) string {
+	environmentVariableName := utils.CamelCaseToScreamingSnakeCase(key)
+
+	if value, exists := os.LookupEnv(environmentVariableName); exists {
+		return value
+	}
+
+	return fallbackValue
 }

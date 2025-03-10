@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/pocket-id/pocket-id/backend/resources"
 )
 
 func GetFileExtension(filename string) string {
@@ -28,27 +30,8 @@ func GetImageMimeType(ext string) string {
 	}
 }
 
-func CopyDirectory(srcDir, destDir string) error {
-	files, err := os.ReadDir(srcDir)
-	if err != nil {
-		return err
-	}
-
-	for _, file := range files {
-		srcFilePath := filepath.Join(srcDir, file.Name())
-		destFilePath := filepath.Join(destDir, file.Name())
-
-		err := CopyFile(srcFilePath, destFilePath)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func CopyFile(srcFilePath, destFilePath string) error {
-	srcFile, err := os.Open(srcFilePath)
+func CopyEmbeddedFileToDisk(srcFilePath, destFilePath string) error {
+	srcFile, err := resources.FS.Open(srcFilePath)
 	if err != nil {
 		return err
 	}

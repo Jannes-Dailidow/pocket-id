@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"math/big"
 	"net/url"
+	"regexp"
+	"strings"
+	"unicode"
 )
 
 // GenerateRandomAlphanumericString generates a random alphanumeric string of the given length
@@ -29,15 +32,44 @@ func GenerateRandomAlphanumericString(length int) (string, error) {
 	return string(result), nil
 }
 
-func GetHostFromURL(rawURL string) string {
+func GetHostnameFromURL(rawURL string) string {
 	parsedURL, err := url.Parse(rawURL)
 	if err != nil {
 		return ""
 	}
-	return parsedURL.Host
+	return parsedURL.Hostname()
 }
 
 // StringPointer creates a string pointer from a string value
 func StringPointer(s string) *string {
 	return &s
+}
+
+func CapitalizeFirstLetter(s string) string {
+	if s == "" {
+		return s
+	}
+	runes := []rune(s)
+	runes[0] = unicode.ToUpper(runes[0])
+	return string(runes)
+}
+
+func CamelCaseToSnakeCase(s string) string {
+	var result []rune
+	for i, r := range s {
+		if unicode.IsUpper(r) && i > 0 {
+			result = append(result, '_')
+		}
+		result = append(result, unicode.ToLower(r))
+	}
+	return string(result)
+}
+
+func CamelCaseToScreamingSnakeCase(s string) string {
+	// Insert underscores before uppercase letters (except the first one)
+	re := regexp.MustCompile(`([a-z0-9])([A-Z])`)
+	snake := re.ReplaceAllString(s, `${1}_${2}`)
+
+	// Convert to uppercase
+	return strings.ToUpper(snake)
 }

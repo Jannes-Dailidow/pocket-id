@@ -7,7 +7,8 @@
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import * as Table from '$lib/components/ui/table';
 	import UserService from '$lib/services/user-service';
-	import type { Paginated } from '$lib/types/pagination.type';
+	import appConfigStore from '$lib/stores/application-configuration-store';
+	import type { Paginated, SearchPaginationSortRequest } from '$lib/types/pagination.type';
 	import type { User } from '$lib/types/user.type';
 	import { axiosErrorToast } from '$lib/utils/error-util';
 	import { LucideLink, LucidePencil, LucideTrash } from 'lucide-svelte';
@@ -15,19 +16,19 @@
 	import { toast } from 'svelte-sonner';
 	import OneTimeLinkModal from './one-time-link-modal.svelte';
 
-	let { users: initialUsers }: { users: Paginated<User> } = $props();
-	let users = $state<Paginated<User>>(initialUsers);
-	$effect(() => {
-		users = initialUsers;
+	let { users = $bindable() }: { users: Paginated<User> } = $props();
+
+	let userIdToCreateOneTimeLink: string | null = $state(null);
+
+	let requestOptions: SearchPaginationSortRequest | undefined = $state({
+		sort: { column: 'firstName', direction: 'asc' },
+		pagination: {
+			page: users.pagination.currentPage,
+			limit: users.pagination.itemsPerPage
+		}
 	});
 
-	let userIdToCreateOneTimeLink: string | null =  $state(null);;
-
 	const userService = new UserService();
-
-	function fetchItems(search: string, page: number, limit: number) {
-		return userService.list(search, { page, limit });
-	}
 
 	async function deleteUser(user: User) {
 		openConfirmDialog({
@@ -39,7 +40,7 @@
 				action: async () => {
 					try {
 						await userService.remove(user.id);
-						users = await userService.list();
+						users = await userService.list(requestOptions!);
 					} catch (e) {
 						axiosErrorToast(e);
 					}
@@ -52,25 +53,33 @@
 
 <AdvancedTable
 	items={users}
-	{fetchItems}
+	{requestOptions}
+	defaultSort={{ column: 'firstName', direction: 'asc' }}
+	onRefresh={async (options) => (users = await userService.list(options))}
 	columns={[
-		'First name',
-		'Last name',
-		'Email',
-		'Username',
-		'Role',
+		{ label: 'First name', sortColumn: 'firstName' },
+		{ label: 'Last name', sortColumn: 'lastName' },
+		{ label: 'Email', sortColumn: 'email' },
+		{ label: 'Username', sortColumn: 'username' },
+		{ label: 'Role', sortColumn: 'isAdmin' },
+		...($appConfigStore.ldapEnabled ? [{ label: 'Source' }] : []),
 		{ label: 'Actions', hidden: true }
 	]}
-	withoutSearch
 >
 	{#snippet rows({ item })}
 		<Table.Cell>{item.firstName}</Table.Cell>
 		<Table.Cell>{item.lastName}</Table.Cell>
 		<Table.Cell>{item.email}</Table.Cell>
 		<Table.Cell>{item.username}</Table.Cell>
-		<Table.Cell class="hidden lg:table-cell">
+		<Table.Cell>
 			<Badge variant="outline">{item.isAdmin ? 'Admin' : 'User'}</Badge>
 		</Table.Cell>
+		{#if $appConfigStore.ldapEnabled}
+			<Table.Cell>
+				<Badge variant={item.ldapId ? 'default' : 'outline'}>{item.ldapId ? 'LDAP' : 'Local'}</Badge
+				>
+			</Table.Cell>
+		{/if}
 		<Table.Cell>
 			<DropdownMenu.Root>
 				<DropdownMenu.Trigger class={buttonVariants({ variant: 'ghost', size: 'icon' })}>
@@ -84,11 +93,13 @@
 					<DropdownMenu.Item onclick={() => goto(`/settings/admin/users/${item.id}`)}
 						><LucidePencil class="mr-2 h-4 w-4" /> Edit</DropdownMenu.Item
 					>
-					<DropdownMenu.Item
-						class="text-red-500 focus:!text-red-700"
-						onclick={() => deleteUser(item)}
-						><LucideTrash class="mr-2 h-4 w-4" />Delete</DropdownMenu.Item
-					>
+					{#if !item.ldapId || !$appConfigStore.ldapEnabled}
+						<DropdownMenu.Item
+							class="text-red-500 focus:!text-red-700"
+							onclick={() => deleteUser(item)}
+							><LucideTrash class="mr-2 h-4 w-4" />Delete</DropdownMenu.Item
+						>
+					{/if}
 				</DropdownMenu.Content>
 			</DropdownMenu.Root>
 		</Table.Cell>
